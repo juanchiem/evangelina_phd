@@ -37,24 +37,25 @@ dat %>%
   geom_bar(stat="identity", alpha=.4)+
   geom_text(size = 3, position = position_stack(vjust = 0.5))+ 
   facet_grid("trat") + 
-  theme_bw()
+  theme_bw()+
+  labs(x= "Mes de nacimiento")
 ```
 
 · Peso al nacer
 
 ```{r}
 dat %>% 
-  mutate(tanda = case_when(fecha_0 < "2021-04-12" ~ 1,
-                           TRUE ~ 2)) %>% 
-  filter(kg_0>30) %>% 
+  # filter(kg_0>30) %>% 
   ggplot()+
   aes(trat, kg_0)+
   geom_jitter(width=.1, alpha=.3) +
-  facet_grid(tanda~sexo)+
+  facet_grid(.~sexo)+
   stat_summary(fun=median, geom="crossbar", col="red")+
   stat_summary(aes(label=..y.. %>% round(2)), 
                fun=median, geom="text", size=4, 
-               vjust = 0)
+               vjust = 0)+
+  geom_text(aes(label=id_ternero), hjust=2, size=2)
+
 ```
 
 · Periodo de experimento por ternero
@@ -76,10 +77,11 @@ dat_long %>%
   geom_pointrangeh(aes(xmin = min, xmax = max), size=.1, alpha=.7)+ 
   facet_wrap("trat") + 
   geom_text(aes(x=max, y = id_ternero, label=dias_tot), size=2)+ 
-  theme_bw() +
-  theme(axis.text.x=element_text(angle=60, hjust=1))+
   scale_x_date(date_breaks = "2 week",
-               date_minor_breaks = "1 week", date_labels = "%b %d") 
+               date_minor_breaks = "1 week", date_labels = "%b %d") +
+  labs(x = "Fecha de nacimiento")+
+  theme_bw() +
+  theme(axis.text.x=element_text(angle=60, hjust=1))
 
 ```
 
@@ -92,9 +94,8 @@ library(ggrepel)
 
 Nivel de ternero 
 
-```{r, eval=FALSE}
+```{r, eval = FALSE}
 dat_long %>%   
-  # filter(!id_ternero %in% c(14,15,16, 28, 44,45)) %>%
   ggplot()+
   aes(x=dias, y=kg, col=trat)+
   geom_path(aes(col=trat), alpha =.9)+
@@ -111,12 +112,12 @@ ggsave(last_plot(), file = "plots/id_terneros.png", w=8, h=8)
 ```
 
 
-![ternero individual](plots/id_terneros.png){width=100%}
+![](plots/id_terneros.png){width=100%}
 
 
 Segun tratamiento 
 
-```{r}
+```{r, Out.width = "100%"}
 dat_long %>%   
   # filter(semana<5) %>%
   # filter(!id_ternero %in% c(13,14,15,16, 28)) %>%
@@ -131,9 +132,7 @@ dat_long %>%
                   nudge_x = 0.1,
                   na.rm = TRUE, 
                   size=2, col ="red")+ 
-  labs(col = "")+
-  # cowplot::theme_minimal_grid()
-  # theme_juan(11, "none")+
+  labs(x="", col = "")+
   theme(axis.text.x=element_text(angle=60, hjust=1))+
   scale_x_date(date_breaks = "2 week",
                date_minor_breaks = "1 week", date_labels = "%b %d")
@@ -146,6 +145,26 @@ ggsave(last_plot(), file = "plots/peso_terneros_fecha.png", w=6, h=4)
 googledrive::drive_upload(path = googledrive::as_dribble("evanchi_phd"), "plots/peso_terneros_fecha.png", 
              overwrite = TRUE)
 ```
+
+
+Sin terneros 13 a 16, 39 (muerto) 
+
+```{r}
+dat_long %>%  
+  filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  # filter(!id_ternero %in% 28) %>% 
+  ggplot()+
+  aes(x=dias, y=kg, col =trat)+
+  geom_line(aes(group=id_ternero), alpha =.2)+
+  geom_smooth()+
+  facet_grid(tanda~sexo)+
+  theme_bw()+
+  scale_y_continuous(breaks = scales::pretty_breaks())+
+  labs(x="", col = "")
+```
+
+
 
 # Ganancia de peso 
 
@@ -170,9 +189,45 @@ efic_dat %>%
   ggplot()+
   aes(x=lubridate::week(fecha_nac), y = gpd)+
   geom_point()+
-  facet_grid(trat~sexo)+
+  facet_grid(sexo~trat)+
   geom_text(aes(label=id_ternero), hjust=2, size=2)+
-  geom_smooth(method= "lm")
+  geom_smooth(method= "lm")+
+  labs(x = "Nacimiento - semana del año", 
+       y = "Ganancia diaria de peso (kg/d)")
+
+```
+
+Sin terneros 13 a 16, 39 (muerto) 
+
+```{r}
+efic_dat %>% 
+  filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  ggplot()+
+  aes(x=lubridate::week(fecha_nac), y = gpd)+
+  geom_point()+
+  facet_grid(sexo~trat)+
+  geom_text(aes(label=id_ternero), hjust=2, size=2)+
+  geom_smooth(method= "lm")+
+  labs(x = "Nacimiento - semana del año", 
+       y = "Ganancia diaria de peso (kg/d)")
+
+```
+
+Sin terneros 13 a 16, 39 (muerto) 
+
+```{r}
+efic_dat %>% 
+  filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  ggplot()+
+  aes(x=lubridate::week(fecha_nac), y = gpd)+
+  geom_point()+
+  facet_grid(.~trat)+
+  geom_text(aes(label=id_ternero), hjust=2, size=2)+
+  geom_smooth(method= "lm")+
+  labs(x = "Nacimiento - semana del año", 
+       y = "Ganancia diaria de peso (kg/d)")
 ```
 
 
@@ -186,11 +241,11 @@ efic_dat %>%
   stat_summary(aes(label=round(..y..,2)), 
                fun=median, geom="text", size=4, 
                vjust = 0) + 
-  stat_summary(fun=median, geom="crossbar", col="red")
+  stat_summary(fun=median, geom="crossbar", col="red")+
+   labs(x = "", 
+       y = "Ganancia diaria de peso (kg/d)")
 
 ```
-
-
 
 
 ```{r, eval =FALSE}
