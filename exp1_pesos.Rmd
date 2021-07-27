@@ -92,9 +92,8 @@ library(ggrepel)
 
 Nivel de ternero 
 
-```{r}
+```{r, eval=FALSE}
 dat_long %>%   
-  # filter(dias<31) %>%
   # filter(!id_ternero %in% c(14,15,16, 28, 44,45)) %>%
   ggplot()+
   aes(x=dias, y=kg, col=trat)+
@@ -102,15 +101,18 @@ dat_long %>%
   geom_point(aes(shape=sexo), size=1.2)+
   scale_shape_manual(values=c(4, 16))+
   facet_wrap("id_ternero")+
-  # geom_smooth(span=0.9)+
   theme_bw()+
   scale_y_continuous(breaks = scales::pretty_breaks())+
-  # geom_text_repel(aes(label = label),
-  #                 nudge_x = 0.1,
-  #                 na.rm = TRUE, 
-  #                 size=2, col ="red")+ 
   labs(col = "", x = "Dias desde nacimiento")
 ```
+
+```{r, eval=FALSE}
+ggsave(last_plot(), file = "plots/id_terneros.png", w=8, h=8)
+```
+
+
+![ternero individual](plots/id_terneros.png){width=100%}
+
 
 Segun tratamiento 
 
