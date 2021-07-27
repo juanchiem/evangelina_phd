@@ -1,0 +1,52 @@
+---
+title: "Agrupamiento de vacas por similaridad"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r}
+pacman::p_load(tidyverse, googlesheets4)
+# googledrive::drive_find(type = "spreadsheet")
+vacas <- gs4_get("1fBtTlC7heijKUcXpMicjT3UkAcUtx5vwD6HyBfw4K30")
+gs4_browse(vacas)
+dat <- read_sheet(vacas, 
+                  sheet = "grupo_3", 
+                  range ="A:G")
+# info <- range_read(vacas, sheet = "dia0", n_max = 7)
+# save(dat,info, file = "data/dat.Rda")
+# pacman::p_load(tidyverse)
+# load("data/dat.Rda")
+# info
+# head(dat)
+```
+
+Hierarchical Agglomerative Clustering
+
+```{r}
+# Data
+dat %>%  
+  # filter(
+  #   cc>2, 
+  #   id !=3936 
+  #   ) %>% 
+  # mutate(dias_a_parto = round(as.numeric(fpp - Sys.time()),0)) %>%
+  select(-fpp) %>% 
+  column_to_rownames(var="id") -> dat2 
+  
+d0=dist(dat2)
+h1=hclust(d0,method='complete') #average, ward.D, single  
+plot(h1,xlab='Id Vaca (Complete Linkage)', sub = "")
+
+hcd <- as.dendrogram(h1)
+nodePar <- list(lab.cex = 0.6, pch = c(NA, 19), 
+                cex = 0.7, col = "blue")
+# Horizontal plot
+plot(hcd,  xlab = "Height",
+     nodePar = nodePar, horiz = TRUE)
+
+sheet_write(tibble(id= h1$labels[h1$order], 
+                   orden = 1:38,
+                   trt = "na"),  
+            ss = vacas, sheet = "random_3")
+```

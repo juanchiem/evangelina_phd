@@ -1,0 +1,169 @@
+---
+title: "Agrupamiento de vacas por similaridad"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+<style type="text/css">
+.main-container {
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+options(scipen=999)
+
+# https://www.datanovia.com/en/blog/k-means-clustering-visualization-in-r-step-by-step-guide/
+categ <- function(x){
+  cut(x, 
+      breaks = c(quantile(x, probs = c(0, 0.33, 0.666, 1))),
+      labels=c("bajo","medio","alto"),
+      include.lowest=TRUE)
+}
+
+categ_fecha <- function(x){
+  cut(x, 
+      breaks = c(quantile(x, probs = c(0, 0.5, 1))),
+      labels=c("pronto","luego"),
+      include.lowest=TRUE)
+}
+```
+
+
+```{r}
+pacman::p_load(tidyverse)
+# pacman::p_load(tidyverse, googlesheets4)
+# googledrive::drive_find(type = "spreadsheet")
+# vacas <- gs4_get("1fBtTlC7heijKUcXpMicjT3UkAcUtx5vwD6HyBfw4K30")
+# dat <- range_read(vacas, sheet = "dia0")
+# info <- range_read(vacas, sheet = "dia0", n_max = 7)
+# save(dat,info, file = "data/dat.Rda")
+
+load("data/dat.Rda")
+info
+# head(dat)
+```
+
+
+```{r}
+dat %>% 
+  mutate(dias_al_parto = as.numeric(fpp - Sys.time())) %>%
+  # select(-fpp) %>% 
+  filter(
+    cc>2, 
+    id !=3936) %>% 
+  arrange(id) %>% 
+  print(as_tibble(.), n = Inf) 
+
+dat1 <- dat %>%
+  mutate(dias_al_parto = as.numeric(fpp - Sys.time())) %>%
+  select(-fpp) %>% 
+  filter(
+    cc>2, 
+    id !=3936)  
+
+  # mutate(dap_categ=categ_fecha(dias_al_parto)) %>% 
+  # arrange(id) %>% 
+  # print(as_tibble(.), n = Inf) 
+
+# mutate(del_cat=categ(del),
+  #        dcc_cat=categ(dcc),
+  #        ptl_cat=categ(ptl)
+  #        ) 
+
+# ftable(xtabs(~ cc + n_lact, dat1))
+
+# dat1 %>% 
+#   mutate(dap_categ=categ_fecha(dias_al_parto)) %>% 
+#   janitor::tabyl(cc, n_lact, dap_categ) %>% 
+#   janitor::adorn_totals()  
+
+```
+
+```{r, eval=FALSE}
+dat1 %>% 
+   filter(
+    cc>2, 
+    id !=3936
+) %>% 
+  ggplot(aes(x=dias_al_parto, y=ptl, 
+             col = factor(cc),  size = del, label = id))+
+  geom_text()+
+  labs(y = "Produccion total de leche",
+       size = "Dias en leche",
+       col = "Condicion corporal")
+```
+
+```{r, eval=T, fig.height=12, fig.widht=15}
+dat1 %>% 
+  # rownames_to_column(var="id") %>% 
+  GGally::ggpairs() -> ggpairs 
+plotly::ggplotly(ggpairs)
+```
+
+Hierarchical Agglomerative Clustering
+
+```{r}
+# Data
+dat %>%  
+  filter(
+    cc>2, 
+    id !=3936 
+    ) %>% 
+  mutate(dias_a_parto = round(as.numeric(fpp - Sys.time()),0)) %>%
+  select(-fpp) %>% 
+  column_to_rownames(var="id") -> dat2 
+  
+d0=dist(dat2)
+h1=hclust(d0,method='complete') #average, ward.D, single  
+plot(h1,xlab='Id Vaca (Complete Linkage)', sub = "")
+```
+
+```{r, eval=FALSE}
+# K-means
+
+library(factoextra)
+
+# dim(dat1)
+set.seed(1)
+res.km <- kmeans(scale(dat1[, -c(1,4)]), 4)
+# fviz_cluster(res.km, data = dat1[, -c(1,4)],
+#              # palette = c("#2E9FDF", "#E7B800"),
+#              geom = "point",
+#              ellipse.type = "convex",
+#              ggtheme = theme_bw()
+#              )
+# ggsave(last_plot(), file = "kmeans_plot.png")
+# ![](kmeans_plot.png)
+```
+
+
+```{r, eval=FALSE}
+# Dimension reduction using PCA
+res.pca <- prcomp(dat1[, -c(1,4)],  scale = TRUE)
+# Coordinates of individuals
+ind.coord <- as.data.frame(get_pca_ind(res.pca)$coord)
+# Add clusters obtained using the K-means algorithm
+ind.coord$cluster <- factor(res.km$cluster)
+# Add Species groups from the original data sett
+ind.coord$id <- dat1$id
+
+# Data inspection
+ind.coord %>%  
+  group_by(cluster) %>% 
+  count()
+
+ind.coord %>%  
+  select(cluster, id) %>% 
+  arrange(cluster)
+```
+
+```{r, eval=FALSE}
+# Percentage of variance explained by dimensions
+eigenvalue <- round(get_eigenvalue(res.pca), 1)
+variance.percent <- eigenvalue$variance.percent
+head(eigenvalue)
+```

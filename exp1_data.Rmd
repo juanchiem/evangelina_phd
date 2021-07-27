@@ -1,0 +1,71 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+pacman::p_load(tidyverse, googlesheets4)
+# gs4_auth(email = "evangelina.miqueo@gmail.com")
+gs4_auth(email = "edwardsmolina@gmail.com")
+# gs4_find("Resultados exp 1")
+
+exp1 <- gs4_get("https://docs.google.com/spreadsheets/d/1VdxnM5covl_eGLaGrFNC0JHKE-9FFsf-7AWVi5ACURg/edit?usp=sharing")
+# peso %>% sheet_names()
+# exp1 %>% gs4_browse()
+```
+
+```{r}
+# gs4_browse(peso)
+dat <- read_sheet(exp1, 
+                  sheet = "Peso", 
+                  skip =0) %>% 
+  janitor::clean_names()
+dat
+info <- read_sheet(exp1, 
+                  sheet = "Datos nacimiento", 
+                  range = "A:E", 
+                  skip =0)
+info
+
+# pacman::p_load(tidyverse)
+# load("data/dat.Rda")
+# info
+# head(dat)
+```
+
+```{r}
+dat %>% 
+  mutate(tanda = case_when(fecha_0 < "2021-04-12" ~ 1,
+                           TRUE ~ 2)) %>% 
+  select(!starts_with("kg")) %>%
+  pivot_longer(
+    cols = starts_with("fecha"),
+    names_to = "semana",
+    names_prefix = "fecha_",
+    values_to = "fecha")  %>% 
+  left_join(dat %>% 
+              select(!starts_with("fecha")) %>%
+              pivot_longer(
+                cols = starts_with("kg"),
+                names_to = "semana",
+                names_prefix = "kg_",
+                values_to = "kg") 
+            # by = c("id_ternero", "trat", "semana"))  %>% 
+  )  %>% 
+  group_by(id_ternero)%>% 
+  # mutate(fecha = lubridate::parse_date_time(fecha, '%d/%m', exact = TRUE)) %>%  
+  mutate(dias=c(0, cumsum(as.numeric(diff(fecha))))) %>% 
+  drop_na(kg) %>% 
+  group_by(id_ternero) %>%
+  mutate(label = if_else(semana == max(semana), 
+                         as.character(id_ternero), NA_character_)) %>% 
+  left_join(info %>% select(id_ternero, Sexo)) %>% 
+  mutate(fecha= lubridate::as_date(fecha)) -> dat_long
+
+dat_long
+```
+
+```{r}
+save(dat, dat_long, file = "data/dat_exp1.Rdata")
+```
+
