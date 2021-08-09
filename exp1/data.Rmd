@@ -30,13 +30,16 @@ info
 # pacman::p_load(tidyverse)
 # load("data/dat.Rda")
 # info
-# head(dat)
+dat %>% 
+  filter(id_ternero == 81) %>% view
 ```
 
 ```{r}
 dat %>% 
-  mutate(tanda = case_when(fecha_0 < "2021-04-12" ~ 1,
-                           TRUE ~ 2)) %>% 
+  # mutate(
+  #   semana_naci = lubridate::week(fecha_0), 
+  #   tanda = case_when(fecha_0 < "2021-04-12" ~ 1,
+  #                          TRUE ~ 2)) %>% 
   select(!starts_with("kg")) %>%
   pivot_longer(
     cols = starts_with("fecha"),
@@ -59,13 +62,57 @@ dat %>%
   group_by(id_ternero) %>%
   mutate(label = if_else(semana == max(semana), 
                          as.character(id_ternero), NA_character_)) %>% 
-  left_join(info %>% select(id_ternero, Sexo)) %>% 
+  # left_join(info %>% select(id_ternero, Sexo)) %>% 
   mutate(fecha= lubridate::as_date(fecha)) -> dat_long
 
 dat_long
 ```
 
 ```{r}
-save(dat, dat_long, file = "data/dat_exp1.Rdata")
+# gs4_browse(peso)
+consumo_wide <- read_sheet(exp1, 
+                  sheet = "Consumo_promedio_total", 
+                  skip =0) %>% 
+  janitor::clean_names()
+consumo_wide
+```
+
+```{r}
+consumo <- 
+  # select(!starts_with("kg")) %>%
+  consumo_wide %>% 
+  mutate_if(is.character, as.factor) %>% 
+  pivot_longer(
+    cols = starts_with("s_"),
+    names_to = "semana",
+    names_prefix = "s_",
+    values_to = "g")   
+```
+
+
+```{r}
+# gs4_browse(peso)
+efi_wide <- read_sheet(exp1, 
+                  sheet = "efic_conver",
+                  range = "AK2:AV85") %>% 
+  janitor::clean_names()
+efi_wide
+```
+
+```{r}
+efi <- 
+  # select(!starts_with("kg")) %>%
+  efi_wide %>% 
+  mutate_if(is.character, as.factor) %>% 
+  pivot_longer(
+    cols = starts_with("s_"),
+    names_to = "semana",
+    names_prefix = "s_",
+    values_to = "g_g")   
+```
+
+
+```{r}
+save(dat, dat_long, consumo, efi, file = "exp1/data/dat_exp1.Rdata")
 ```
 

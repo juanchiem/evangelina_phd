@@ -24,7 +24,7 @@ exp1 <- gs4_get("https://docs.google.com/spreadsheets/d/1VdxnM5covl_eGLaGrFNC0JH
 
 ```{r}
 pacman::p_load(tidyverse, googlesheets4)
-load("data/dat_exp1.Rdata")
+load(here::here("exp1/data/dat_exp1.Rdata"))
 ```
 
 · Nacimientos por mes / sexo
@@ -57,6 +57,18 @@ dat %>%
   geom_text(aes(label=id_ternero), hjust=2, size=2)
 
 ```
+
+```{r}
+dat %>% glimpse
+
+mod <- lm(kg_0 ~ trat * sexo, data=dat)
+anova(mod)
+summary(mod)
+
+```
+
+
+> No hay Hay efecto del tratamiento sobre el peso al nacimiento y si hay efecto del sexo. 
 
 · Periodo de experimento por ternero
 
@@ -113,7 +125,6 @@ ggsave(last_plot(), file = "plots/id_terneros.png", w=8, h=8)
 
 
 ![](plots/id_terneros.png){width=100%}
-
 
 Segun tratamiento 
 
@@ -175,7 +186,9 @@ dat_long %>%
   # filter(!id_ternero %in% c(14,15,16, 28, 44,45)) %>%
   group_by(id_ternero) %>% 
   summarise(fecha_nac = first(fecha),
-            trat = first(trat) , sexo = first(sexo), 
+            trat = first(trat) , 
+            sexo = first(sexo), 
+            tanda = first(tanda),
             intervalo_dias = max(dias),
             peso_nac = min(kg),
             peso_fin = max(kg),
@@ -214,7 +227,38 @@ efic_dat %>%
 
 ```
 
-Sin terneros 13 a 16, 39 (muerto) 
+
+```{r}
+dat_long %>% 
+  # filter(!id_ternero %in% c(14,15,16, 28, 44,45)) %>%
+  group_by(id_ternero) %>% 
+  mutate(intervalo_dias = dias - lag(dias),
+         delta_kg= kg - lag(kg))  %>%  
+  mutate(adg = delta_kg/intervalo_dias) %>% 
+  # filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  filter(!id_ternero %in% 41) %>% 
+  filter(!dias == 0) %>% 
+  mutate_at(vars(id_ternero, trat, sexo), as.factor) -> dat_adg
+```
+
+```{r}
+library(lme4)
+library(pbkrtest)
+library(lmerTest)
+```
+
+Sin terneros 39 y 41 (muertos) 
+
+```{r}
+dat_adg %>%
+  select(id_ternero, trat, sexo, semana, fecha, kg, dias_d_nac = dias, intervalo_dias, delta_kg, adg) %>% 
+  head(n=15)
+mod1 <- lmer(adg ~ trat * dias + (1+dias|id_ternero) + (1|sexo),
+             data=dat_adg)
+anova(mod1, ddf = "Kenward-Roger", type=3)
+```
+
 
 ```{r}
 efic_dat %>% 
@@ -252,7 +296,9 @@ efic_dat %>%
 library(lme4)
 library(nlme)
 library(emmeans)
-dat1 <- dat_long %>% left_join(info %>% select(id_ternero, Sexo), by = "id_ternero") 
+dat1 <- dat_long %>% 
+  left_join(info %>% 
+              select(id_ternero, Sexo), by = "id_ternero") 
 dat1
 
 m <- lmer(kg ~ trat * dias + Sexo + (1|id_ternero), data = dat1)

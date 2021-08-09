@@ -1,0 +1,147 @@
+---
+title: "Exp 1 - consumo"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+```
+
+
+```{r, eval =FALSE}
+pacman::p_load(tidyverse, googlesheets4)
+# gs4_deauth()
+# gs4_auth(email = "evangelina.miqueo@gmail.com")
+gs4_auth(email = "edwardsmolina@gmail.com")
+# gs4_find("Resultados exp 1")
+
+exp1 <- gs4_get("https://docs.google.com/spreadsheets/d/1VdxnM5covl_eGLaGrFNC0JHKE-9FFsf-7AWVi5ACURg/edit?usp=sharing")
+# peso %>% sheet_names()
+# exp1 %>% gs4_browse()
+```
+
+```{r}
+pacman::p_load(tidyverse, googlesheets4)
+load(here::here("exp1/data/dat_exp1.Rdata"))
+```
+
+## Evolución consumo total 
+
+```{r, eval = FALSE}
+consumo %>%   
+  ggplot()+
+  aes(x=as.numeric(semana), y=g, col=trat)+
+  geom_path(aes(col=trat), alpha =.9)+
+  geom_point(aes(shape=sexo), size=1.2)+
+  scale_shape_manual(values=c(4, 16))+
+  facet_wrap("id_ternero")+
+  theme_bw()+
+  scale_y_continuous(breaks = scales::pretty_breaks())+
+  labs(col = "", x = "Semanas desde nacimiento")
+```
+
+```{r, eval=FALSE}
+ggsave(last_plot(), file = "exp1/plots/consumo_id_terneros.png", w=8, h=8)
+```
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics(here::here('exp1/plots/consumo_id_terneros.png'))
+```
+
+Sin terneros 39 y 41 (muertos) 
+
+```{r, eval = FALSE}
+consumo %>%  
+  mutate_at(vars(semana), as.numeric) %>% 
+  # filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  filter(!id_ternero %in% 41) %>% 
+  ggplot()+
+  aes(x=semana, y=g)+
+  geom_line(aes(group=id_ternero), alpha =.2)+
+  geom_smooth()+
+  facet_grid(sexo~trat)+
+  theme_bw()+
+  scale_y_continuous(breaks = scales::pretty_breaks())+
+  labs(x="", col = "")
+```
+
+```{r, eval=FALSE}
+ggsave(last_plot(), file = "exp1/plots/consumo_trat.png", w=6, h=4)
+```
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics(here::here('exp1/plots/consumo_trat.png'))
+```
+
+
+## Evolución eficiencia de conversion  
+
+```{r, eval = FALSE}
+efi %>%   
+  ggplot()+
+  aes(x=as.numeric(semana), y=g_g, col=trat)+
+  geom_path(aes(col=trat), alpha =.9)+
+  geom_point(aes(shape=sexo), size=1.2)+
+  scale_shape_manual(values=c(4, 16))+
+  facet_wrap("id_ternero")+
+  theme_bw()+
+  scale_y_continuous(breaks = scales::pretty_breaks())+
+  labs(col = "", x = "Semanas desde nacimiento")
+```
+
+```{r, eval=FALSE}
+ggsave(last_plot(), file = "exp1/plots/eficiencia_terneros.png", w=8, h=8)
+```
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics(here::here('exp1/plots/eficiencia_terneros.png'))
+```
+
+
+```{r, eval = FALSE}
+efi %>%  
+  mutate_at(vars(semana), as.numeric) %>% 
+  # filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  filter(!id_ternero %in% 41) %>% 
+  ggplot()+
+  aes(x=semana, y=g_g)+
+  geom_line(aes(group=id_ternero), alpha =.2)+
+  geom_smooth()+
+  facet_grid(sexo~trat)+
+  theme_bw()+
+  scale_y_continuous(breaks = scales::pretty_breaks())+
+  labs(x="", col = "")
+```
+
+```{r, eval=FALSE}
+ggsave(last_plot(), file = "exp1/plots/efi_trat.png", w=6, h=4)
+```
+
+```{r echo=FALSE, out.width='100%'}
+knitr::include_graphics(here::here('exp1/plots/efi_trat.png'))
+```
+
+
+```{r, eval =FALSE}
+library(lme4)
+library(nlme)
+library(emmeans)
+dat1 <- dat_long %>% left_join(info %>% select(id_ternero, Sexo), by = "id_ternero") 
+dat1
+
+m <- lmer(kg ~ trat * dias + Sexo + (1|id_ternero), data = dat1)
+plot(m)
+car::Anova(m)
+em <- emmeans(m, "trat")
+contrast(em)
+contrast(em, adjust = "bonferroni")
+em <- emmeans(m, c("age", "Sex"), at = list(dias = c(1, 14)))
+contrast(em)
+contrast(em, adjust = "bonferroni")
+contrast(em, method = "pairwise")
+```
+

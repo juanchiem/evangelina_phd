@@ -1,0 +1,294 @@
+---
+title: "Experimento 1 - Análisis "
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, warning = F, message = F)
+```
+
+```{r}
+pacman::p_load(lme4, pbkrtest)
+pacman::p_load(
+  emmeans,  # medias estimadas por el modelo  
+  multcomp  # comparar las medias entre si - tukey
+  )
+```
+
+
+```{r}
+pacman::p_load(tidyverse, janitor)
+load(here::here("exp1/data/dat_exp1.Rdata"))
+theme_set(theme_bw()+
+  theme(axis.text=element_text(size=10), 
+        axis.title=element_text(size=12, face = "bold"), 
+        legend.title = element_text(size=12, face = "bold")))
+```
+
+· Nacimientos por mes / sexo
+
+```{r}
+dat %>% 
+  count(trat, sexo, fecha_0 %>% lubridate::month()) %>% 
+  ggplot()+ 
+  aes(x=`fecha_0 %>% lubridate::month()`, n, fill = sexo, label =n)+ 
+  geom_bar(stat="identity", alpha=.4)+
+  geom_text(size = 3, position = position_stack(vjust = 0.5))+ 
+  facet_grid("trat") + 
+  labs(x= "Mes de nacimiento")
+```
+
+```{r}
+dat_long %>% 
+  group_by(trat, sexo) %>% 
+  summarize(terneros = paste(sort(unique(id_ternero)),collapse=", ")) %>% 
+  knitr::kable()
+
+```
+
+
+· Peso al nacer
+
+```{r}
+dat %>% 
+  # filter(kg_0>30) %>% 
+  ggplot()+
+  aes(trat, kg_0)+
+  geom_jitter(width=.1, alpha=.3) +
+  facet_grid(.~sexo)+
+  stat_summary(fun=median, geom="crossbar", col="red")+
+  stat_summary(aes(label=..y.. %>% round(2)), 
+               fun=median, geom="text", size=4, 
+               vjust = 0)+
+  geom_text(aes(label=id_ternero), hjust=2, size=2)
+
+```
+
+```{r}
+mod <- lm(kg_0 ~ trat*sexo, data=dat)
+anova(mod)
+emmeans(mod, ~sexo, type = "response")
+# plot(mod, which=1)
+```
+
+
+> No hay Hay efecto del tratamiento sobre el peso al nacimiento (ni su interacción con el sexo del ternero) y si hay efecto simple del sexo. 
+
+· Periodo de experimento por ternero
+
+```{r}
+library(ggstance)
+```
+
+```{r}
+dat_long %>% 
+  group_by(id_ternero) %>%
+  summarise(trat=first(trat), 
+            min = min(fecha),
+            max = max(fecha), 
+            fecha = first(fecha), 
+            dias_tot = max(dias)) %>% 
+  ggplot()+
+  aes(lubridate::as_date(fecha), id_ternero)+
+  geom_pointrangeh(aes(xmin = min, xmax = max), size=.1, alpha=.7)+ 
+  facet_wrap("trat") + 
+  geom_text(aes(x=max, y = id_ternero, label=dias_tot), size=2)+ 
+  scale_x_date(date_breaks = "2 week",
+               date_minor_breaks = "1 week", date_labels = "%b %d") +
+  labs(x = "Fecha de nacimiento")+
+  theme(axis.text.x=element_text(angle=60, hjust=1))
+
+```
+
+
+```{r}
+library(ggrepel)
+```
+
+## Ganancia diaria de peso media   
+
+Sin terneros 39 y 41 (muertos) 
+
+```{r}
+dat_long %>%  
+  filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  # filter(!id_ternero %in% 28) %>% 
+  ggplot()+
+  aes(x=dias, y=kg, col =trat)+
+  geom_line(aes(group=id_ternero), alpha =.2)+
+  geom_smooth()+
+  facet_grid(.~sexo)+
+  scale_y_continuous(breaks = scales::pretty_breaks())+
+  labs(x="Días desde nacimiento", col = "", title = "Evolución de pesos (kg)")
+```
+
+```{r}
+dat_long %>% 
+  # filter(!id_ternero %in% c(14,15,16, 28, 44,45)) %>%
+  group_by(id_ternero) %>% 
+  mutate(intervalo_dias = dias - lag(dias),
+         delta_kg= kg - lag(kg))  %>%  
+  mutate(adg = delta_kg/intervalo_dias*1000) %>% 
+  filter(!id_ternero %in% 13:16) %>%
+  filter(!id_ternero %in% 39) %>% 
+  filter(!id_ternero %in% 41) %>% 
+  filter(!dias == 0) %>% 
+  mutate_at(vars(id_ternero, trat, sexo,semana), as.factor) %>% 
+  # mutate_at(vars(semana), as.numeric) %>% 
+  ungroup()-> dat_adg 
+
+```
+
+
+Vista de las primeras líneas del dataset
+
+```{r}
+dat_adg %>%
+  dplyr::select(id_ternero, trat, sexo, semana, fecha, kg, dias_d_nac = dias,
+         intervalo_dias, delta_kg, adg) %>% 
+  head(n=15) %>% 
+  knitr::kable()
+
+```
+
+
+```{r, eval=FALSE}
+dat_adg %>% 
+  filter(delta_kg<0) %>% 
+  pull(id_ternero) -> ver
+
+dat_adg %>% 
+  filter(id_ternero %in% ver) %>%
+  view
+
+dat_adg %>% 
+  tabyl(semana, id_ternero)
+
+hist(dat_adg$delta_kg)
+hist(dat_adg$adg)
+```
+
+
+```{r, eval=FALSE}
+dat_adg %>% 
+  group_by(id_ternero) %>% 
+  summarise(
+    fecha_nac=first(fecha), 
+    trat=first(trat), 
+    sexo =first(sexo),
+    adg=mean(adg)
+  ) %>% 
+  ggplot()+ 
+  aes(x=adg, fill=trat)+
+  geom_histogram(bins = 10, col= "grey30") +
+  stat_summaryh(fun.x=median, geom="vline", col = "red3",
+                aes(xintercept=..x.., y=0,
+                    group = interaction(trat, sexo))) +    
+  stat_summaryh(fun.x=median, geom="text", 
+                aes(label=..x.. %>% round(), y=15), 
+                angle=0, position=position_nudge(x=0))+
+  geom_boxploth(aes(y = 15), width = 2, col = "red3", fill = "red3", 
+                alpha = .3, 
+                lwd=0.1, outlier.shape = NA) +
+  facet_grid(trat~ sexo)
+  # ylim(0,70)+
+
+```
+
+Anova: se desconsideraron los terneros 13 a 16 por mellizos y 39, 41 muertos 
+
+```{r}
+mod1 <- lmer(adg ~ trat * dias + (1+dias|id_ternero) + (1|sexo),
+             data=dat_adg, 
+             control = lmerControl(optimizer ="Nelder_Mead"))
+car::Anova(mod1, ddf = "Kenward-Roger", type=3)
+```
+
+No se observan efectos significativos del tratamiento, ni de su interacción con el tiempo desde el nacimiento para el período experimentado. 
+
+Medias e intervalos de confianza estimadas por el modelo
+
+```{r}
+em <- emmeans(mod1, ~trat|dias, type = "response")
+em
+```
+
+# Consumo 
+
+Sin terneros 39 y 41 (muertos) 
+
+```{r, eval = T}
+consumo %>%  
+  mutate_at(vars(semana), as.numeric) %>% 
+  # filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  filter(!id_ternero %in% 41) %>% 
+  ggplot()+
+  aes(x=semana, y=g)+
+  geom_line(aes(group=id_ternero), alpha =.2)+
+  geom_smooth()+
+  facet_grid(sexo~trat)+
+  scale_y_continuous(breaks = scales::pretty_breaks(5))+
+  scale_x_continuous(breaks = scales::pretty_breaks(7))+
+  labs(x="Semana desde nacimiento", col = "")
+```
+
+# Eficiencia de conversión
+
+```{r, eval = T}
+efi %>%  
+  mutate_at(vars(semana), as.numeric) %>% 
+  # filter(!id_ternero %in% 13:16) %>% 
+  filter(!id_ternero %in% 39) %>% 
+  filter(!id_ternero %in% 41) %>% 
+  ggplot()+
+  aes(x=semana, y=g_g)+
+  geom_line(aes(group=id_ternero), alpha =.2)+
+  geom_smooth()+
+  facet_grid(sexo~trat)+
+  # scale_y_continuous(breaks = scales::pretty_breaks())+
+  scale_x_continuous(breaks = scales::pretty_breaks(7))+
+  labs(x="Semana desde nacimiento", col = "")
+```
+
+
+```{r}
+efi <- efi %>% 
+    mutate_at(vars(semana), as.numeric) 
+
+mod3 <- lmer(g_g ~ trat * semana + (1+semana|id_ternero) + (1|sexo),
+             data=efi, 
+             control = lmerControl(optimizer ="Nelder_Mead"))
+car::Anova(mod3, ddf = "Kenward-Roger", type=3)
+```
+
+
+```{r, eval =F}
+# Preguntas a futuro
+#Hay interacción entre el tratamiento y la época de desarrollo inicial sobre la ganancia de peso diaria?
+
+dat_adg %>% 
+  group_by(id_ternero) %>% 
+  summarise(
+    fecha_nac=first(fecha), 
+    trat=first(trat), 
+    sexo =first(sexo),
+    adg=mean(adg)
+  ) %>% 
+  # dplyr::filter(!id_ternero %in% 13:16) %>% 
+  dplyr::filter(!id_ternero %in% c(39,41)) %>% 
+  ggplot()+
+  aes(x=fecha_nac, y = adg)+
+  geom_point()+
+  facet_grid(.~trat)+
+  geom_text(aes(label=id_ternero), hjust=2, size=2)+
+  geom_smooth(method= "lm")+
+  labs(x = "Fecha de nacimiento", 
+       y = "Ganancia diaria de peso (kg/d)",
+       caption = "El numero indica el id del ternero")
+```
+
+
