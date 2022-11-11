@@ -169,7 +169,7 @@ dat_long %>%
   aes(x=dias, y=kg, col =trat)+
   geom_line(aes(group=id_ternero), alpha =.2)+
   geom_smooth()+
-  facet_grid(tanda~sexo)+
+  facet_grid(.~sexo)+
   theme_bw()+
   scale_y_continuous(breaks = scales::pretty_breaks())+
   labs(x="", col = "")
@@ -188,7 +188,7 @@ dat_long %>%
   summarise(fecha_nac = first(fecha),
             trat = first(trat) , 
             sexo = first(sexo), 
-            tanda = first(tanda),
+            # tanda = first(tanda),
             intervalo_dias = max(dias),
             peso_nac = min(kg),
             peso_fin = max(kg),
