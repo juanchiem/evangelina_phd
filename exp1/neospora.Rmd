@@ -3,59 +3,65 @@ title: "Neospora"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
 ```{r setup global del informe, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, 
                       warning = FALSE, 
                       messages = FALSE)
 ```
 
-Activacion de paquetes
-
-```{r}
-pacman::p_load(rio, lubridate, janitor, gsheet)
-pacman::p_load(GGally, correlation, ggcorrplot, viridis)
-pacman::p_load(cowplot, performance)
-pacman::p_load(skimr, emmeans, multcomp, lme4)
-install.packages("multcompView") # solo una vez y no hace falta cargarlo
-
-pacman::p_load(tidyverse)
-  
-```
-Contexto: se da minerales y vitaminas asociados a propiedades antioxidantes a vacas en el periodo preparto y se evaluan diferentes variables en el ternero tales como peso vivo durante 9 semanas y luego a los 200 dias de vida aproximadamente ademas de evaluar como la ocurrencia de Neosporosis en la madre al preparto afecto el peso al nacer
-```{r}
+```{r paquetes}
+pacman::p_load(tidyverse, lubridate, janitor)
+# pacman::p_load(GGally, correlation, ggcorrplot, viridis)
+# pacman::p_load(cowplot)
+pacman::p_load(lme4, performance, skimr, emmeans, multcomp, ) 
+# install.packages("multcompView") # solo una vez y no hace falta cargarlo
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
 ```
 
+Contexto: se da minerales y vitaminas asociados a propiedades antioxidantes a vacas en el periodo preparto y se evaluan diferentes variables en el ternero tales como peso vivo durante 9 semanas y luego a los 200 dias de vida aproximadamente ademas de evaluar como la ocurrencia de Neosporosis en la madre al preparto afecto el peso al nacer
 
-## Importacion desde el excel
+## Importacion de datos
+
 ```{r}
-raw <- rio::import("C:/Users/juanchi/Desktop/Neospora/Neospora y peso.xlsx")%>%
+raw <- rio::import("../exp1/data/neospora_peso.xlsx")%>%
   clean_names()
 raw %>% str 
 raw %>% head 
 ```
+
 ```{r}
-raw %>% str
+ac_dat <- raw %>% 
+  pivot_longer(cols = ac_0:ac_250, 
+               names_prefix= "ac_", 
+               names_to = "dias", 
+               values_to = "ac")  %>% 
+  mutate_at(vars(dias), as.numeric)
+
+ac_dat %>% str
 ```
 
 ```{r}
-dat <- raw %>% 
-  mutate_at(
-    vars(x63, d200),
-    as.numeric)
-
-dat %>% str
+ac_dat %>% 
+  filter(dias<250) %>% 
+  ggplot()+
+  aes(x=dias, y=ac, col=trat)+
+  geom_jitter(width=.2, alpha=.5)+
+  facet_wrap("sexo") + 
+  geom_line(stat = "summary", fun=mean)+
+  # geom_smooth(se=F, span=.8)+ 
+  theme_bw()+
+  geom_hline(yintercept = 6, linetype="dashed") + 
+  labs(y="IgG (IRCP)", x = "Días desde nacimiento")
 ```
+
+
 ```{r}
 dat_filtrado <- dat %>% 
   filter(x9>=6)
 dat_filtrado
 ```
+
 ```{r}
 dat_filtrado1<-dat_filtrado %>%  select(x0, x9, trat, sexo, cc_vaca, d1)
 dat_filtrado1
@@ -65,6 +71,7 @@ correlaciones <- dat_filtrado1 %>%
 correlaciones
 
 ```
+
 ```{r}
 long <- dat_filtrado %>% 
     select(d1, x0, x9, x7, x14, x63, x250,  trat, sexo, cc_vaca) %>% 
@@ -141,6 +148,7 @@ dat1 <- dat %>%
     
 head(dat1)
 ```
+
 ```{r}
 dat2<-dat1%>% select(Anticuerpos_0hs, Anticuerpos_pp, Anticuerpos_7d, Anticuerpos_14d, Anticuerpos_63d, Anticuerpos_25dic, trat, d1)
 dat2
@@ -150,9 +158,8 @@ dat2
 ```
 
 
-
-
 ## Correlacion spearman
+
 ```{r}
 dat1<-dat %>%  select(elisa_t0_irpc, elisa_preparto_irpc, trat, sexo, cc_vaca, d1)
 dat1
