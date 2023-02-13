@@ -1,0 +1,184 @@
+---
+title: "Ensayo I - peso"
+output: html_document
+---
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
+
+Activacion de paquetes
+
+```{r}
+pacman::p_load(rio, lubridate, janitor, gsheet)
+pacman::p_load(GGally, correlation, ggcorrplot, viridis)
+pacman::p_load(cowplot, performance)
+pacman::p_load(skimr, emmeans, multcomp, lme4)
+install.packages("multcompView") # solo una vez y no hace falta cargarlo
+
+pacman::p_load(tidyverse)
+  
+```
+Contexto: se da minerales y vitaminas asociados a propiedades antioxidantes a vacas en el periodo preparto y se evaluan diferentes variables en el ternero tales como peso vivo durante 9 semanas y luego a los 200 dias de vida aproximadamente ademas de evaluar como la ocurrencia de Neosporosis en la madre al preparto afecto el peso al nacer
+```{r}
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+# Importacion del dataset 
+## Importacion desde google sheets
+```{r}
+#url_peso1 <- "https://docs.google.com/spreadsheets/d/1JK4OlGB8kV53KPqYecbTIX1drCg8aHUZx_-Sa35-UDc/edit#gid=0"
+#browseURL(url_peso1)
+
+#peso1 <- rio::import(url_peso1) %>% 
+ # clean_names()
+#peso1
+```
+## Importacion desde el excel
+```{r}
+raw <- rio::import("C:/Users/juanchi/Desktop/rintro22/Data/neosp_peso.xlsx")
+raw
+```
+
+```{r}
+str(raw)
+```
+```{r}
+library(tidyr)
+
+```
+
+```{r}
+dat <- raw %>%
+  mutate_at(
+    vars(d200, edad),
+    as.numeric)
+dat%>%str
+```
+```{r}
+reg1 <- lm(d1 ~ trat, data= dat)
+reg2 <- lm(d1 ~ CC_vaca, data= dat)
+reg3 <- lm(d1 ~ neosp_pp, data= dat)
+reg4 <- lm(d1 ~ Sexo, data= dat)
+reg5 <- lm(d1 ~ trat+CC_vaca+neosp_pp+Sexo, data= dat)
+reg6 <- lm(d1 ~ trat*CC_vaca*neosp_pp*Sexo, data= dat)
+compare_performance(reg1, reg2, reg3, reg4, reg5, reg6)
+```
+
+```{r}
+check_heteroscedasticity(reg5)
+```
+```{r}
+check_normality(reg5)
+```
+```{r}
+car::Anova(reg5)
+```
+# El peso al nacer esta afectado por la condicion corporal de la madre al parto y por el sexo del ternero
+
+```{r}
+dat %>%
+  pivot_longer(cols= c(d1, d7, d14, d21, d28, d35, d42, d49, d56, d63, d200),
+  names_to = "Age", 
+  values_to = "Weight",
+  names_prefix = "kg") -> dat_long
+dat_long
+```
+```{r}
+dat_long %>%
+  droplevels() %>% 
+  na.omit() -> dat_long1
+dat_long1
+```
+```{r}
+dat_long2 <- dat_long1 %>%
+  mutate(
+    Age = fct_recode(Age,
+                     "1" = "d1",
+                     "7" = "d7",
+                     "14" = "d14",
+                     "21" = "d21",
+                     "28" = "d28",
+                     "35" = "d35",
+                     "42" = "d42",
+                     "49" = "d49",
+                     "56" = "d56",
+                     "63" = "d63",
+                     "200" = "d200"))
+dat_long2 %>% tabyl(Age)
+
+```
+```{r}
+str(dat_long2)
+```
+```{r}
+dat_long3 <- dat_long2 %>%
+  mutate_at(
+    vars(Age),
+    as.numeric)
+dat_long3%>%str
+
+```
+```{r}
+dat_long3 %>%
+  group_by(trat) %>%
+  ggplot() +
+  aes(x=Age, y=Weight, fill=trat)+
+  geom_boxplot(with=0.2)+
+  geom_jitter(alpha=0.2, with=0.2)
+
+```
+
+```{r}
+ggplot(dat_long3) +
+  aes(x = Age, y = Weight, color = trat) + 
+  geom_point()+
+  geom_smooth()
+
+```
+```{r}
+ggplot(dat_long3) +
+  aes(x = Age, y = Weight, colour=trat)+
+  geom_point()+
+  geom_smooth(method = "lm")+
+  facet_wrap(~trat)
+```
+
+## Regresiones
+```{r}
+reg1 <- lm(Weight ~ trat, data= dat_long2)
+reg2 <- lm(Weight ~ Age, data= dat_long2)
+reg3 <- lm(Weight ~ Sexo, data = dat_long2)
+reg4 <- lm(Weight ~ dias_diarrea, data = dat_long2)
+reg5 <- lm(Weight ~ neosp_pp, data = dat_long2)
+reg6 <- lm(Weight ~ trat*Age*Sexo*dias_diarrea*neosp_pp, data = dat_long2)
+reg7 <- lm(Weight ~ trat+Age+Sexo+dias_diarrea+neosp_pp, data = dat_long2)
+compare_performance(reg1, reg2, reg3, reg4, reg5, reg6, reg7)
+```
+```{r}
+check_heteroscedasticity(reg2)
+```
+```{r}
+check_normality(reg2)
+```
+```{r}
+car::Anova(reg2)
+```
+```{r}
+boxcox (reg2)
+```
+
+#Reajusto el modelo 
+```{r}
+reg2_fit <- lm ((Weight^0.5) ~ Age, data = dat_long1)
+```
+
+```{r}
+check_heteroscedasticity(reg2_fit)
+```
+```{r}
+check_normality(reg2_fit)
+```
+
+

@@ -1,0 +1,165 @@
+---
+title: "Neospora"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
+
+Activacion de paquetes
+
+```{r}
+pacman::p_load(rio, lubridate, janitor, gsheet)
+pacman::p_load(GGally, correlation, ggcorrplot, viridis)
+pacman::p_load(cowplot, performance)
+pacman::p_load(skimr, emmeans, multcomp, lme4)
+install.packages("multcompView") # solo una vez y no hace falta cargarlo
+
+pacman::p_load(tidyverse)
+  
+```
+Contexto: se da minerales y vitaminas asociados a propiedades antioxidantes a vacas en el periodo preparto y se evaluan diferentes variables en el ternero tales como peso vivo durante 9 semanas y luego a los 200 dias de vida aproximadamente ademas de evaluar como la ocurrencia de Neosporosis en la madre al preparto afecto el peso al nacer
+```{r}
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+
+## Importacion desde el excel
+```{r}
+raw <- rio::import("C:/Users/juanchi/Desktop/Neospora/Neospora y peso.xlsx")%>%
+  clean_names()
+raw %>% str 
+raw %>% head 
+```
+```{r}
+raw %>% str
+```
+
+```{r}
+dat <- raw %>% 
+  mutate_at(
+    vars(x63, d200),
+    as.numeric)
+
+dat %>% str
+```
+```{r}
+dat_filtrado <- dat %>% 
+  filter(x9>=6)
+dat_filtrado
+```
+```{r}
+dat_filtrado1<-dat_filtrado %>%  select(x0, x9, trat, sexo, cc_vaca, d1)
+dat_filtrado1
+
+correlaciones <- dat_filtrado1 %>% 
+  correlation (method = "spearman")
+correlaciones
+
+```
+```{r}
+long <- dat_filtrado %>% 
+    select(d1, x0, x9, x7, x14, x63, x250,  trat, sexo, cc_vaca) %>% 
+  pivot_longer(
+    cols = c(x9, x0, x7, x14, x63, x250), 
+   names_to = "Momentos_elisa", 
+  values_to = "ACs"
+  ) %>% 
+  droplevels() %>% 
+  na.omit()
+long
+
+```
+```{r}
+str(long)
+```
+```{r}
+long10 <- long9%>%
+  mutate_at(
+    vars(Momentos_elisa),
+        as.numeric)
+long10
+
+```
+
+
+```{r}
+ggplot(long10) +
+  aes(x = Momentos_elisa, y = ACs, color = trat) + 
+  geom_point()+
+  geom_smooth()+
+  facet_wrap(~trat)
+```
+
+```{r}
+reg1 <- lm(ACs ~ trat, data= long10)
+reg2 <- lm(ACs ~ cc_vaca, data= long10)
+reg3 <- lm(ACs ~ Momentos_elisa, data= long10)
+reg4 <- lm(ACs ~ sexo, data= long10)
+reg5 <- lm(ACs ~ d1, data = long10)
+reg6 <- lm(ACs ~ trat+cc_vaca+Momentos_elisa+sexo+d1, data= long10)
+reg7 <- lm(ACs ~ trat*cc_vaca*Momentos_elisa*sexo*d1, data= long10)
+compare_performance(reg1, reg2, reg3, reg4, reg5, reg6, reg7)
+
+```
+```{r}
+check_heteroscedasticity(reg7)
+```
+```{r}
+check_normality(reg7)
+```
+```{r}
+car::Anova(reg7)
+```
+```{r}
+em <- emmeans(reg7, ~ trat, type="response")
+res  <- cld(em, 
+            Letters = letters, 
+            reverse = TRUE, 
+            alpha = .05)  
+res
+```
+
+
+## Nueva columna donde 1 = ACs para Neospora y 0 = negativo para Neospora
+```{r}
+dat1 <- dat %>% 
+  mutate(Anticuerpos_pp = if_else(elisa_preparto_irpc>=6, 1, 0))%>%
+  mutate(Anticuerpos_0hs = if_else(elisa_t0_irpc>=6, 1, 0))%>%
+  mutate(Anticuerpos_7d = if_else(elisa_t7_irpc>=6, 1, 0))%>%
+  mutate(Anticuerpos_14d = if_else(elisa_t14_irpc>=6, 1, 0))%>%
+  mutate(Anticuerpos_63d = if_else(elisa_t63_irpc>=6, 1, 0))%>%
+  mutate(Anticuerpos_25dic = if_else(elisa_25_12_22_irpc>=6, 1, 0))
+    
+head(dat1)
+```
+```{r}
+dat2<-dat1%>% select(Anticuerpos_0hs, Anticuerpos_pp, Anticuerpos_7d, Anticuerpos_14d, Anticuerpos_63d, Anticuerpos_25dic, trat, d1)
+dat2
+```
+```{r}
+
+```
+
+
+
+
+## Correlacion spearman
+```{r}
+dat1<-dat %>%  select(elisa_t0_irpc, elisa_preparto_irpc, trat, sexo, cc_vaca, d1)
+dat1
+long_corr <- dat1 %>% 
+  correlation (method = "spearman")
+long_corr
+```
+
+```
+
