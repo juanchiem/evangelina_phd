@@ -12,10 +12,10 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ```{r paquetes}
 pacman::p_load(tidyverse, lubridate, janitor)
-# pacman::p_load(GGally, correlation, ggcorrplot, viridis)
-# pacman::p_load(cowplot)
+ pacman::p_load(GGally, correlation, ggcorrplot, viridis)
+ pacman::p_load(cowplot)
 pacman::p_load(lme4, performance, skimr, emmeans, multcomp, sjPlot) 
-# install.packages("multcompView") # solo una vez y no hace falta cargarlo
+install.packages("multcompView") # solo una vez y no hace falta cargarlo
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
 ```
@@ -99,10 +99,6 @@ car::Anova(m1)
 car::Anova(m3)
 ```
 
-```{r}
-# sjPlot::plot_model(m1, type = "pred")
-```
-
 Relacion entre madres neospora - positiva vs peso al nacer
 
 ```{r}
@@ -181,35 +177,34 @@ check_normality(m8)
 anova(m8)
 ```
 Voy a realizar la prueba U de Mann-Whitney para comparar diferencias entre las madres positivas que tubieron hijos positivos a Neospora y las madres positivas que tubieron hijos seronegativos para Neospora
-```{r}#
+```{r}
 library(readxl)
+pacman::p_load(readxl)
 library(stats)
+pacman::p_load(stats)
 ```
-```{r}#
+```{r}
 transm <- rio::import("../data/transmision verticas.xlsx")%>%
   clean_names()
 transm %>% str 
 transm %>% head 
 
 ```
-```{r}#
+```{r}
 base_de_datos <- read_excel("../data/transmision verticas.xlsx")
 vacas_tv <- base_de_datos %>% filter(vacas_tv == "Vacas positivas con TV")
 vacas_no_tv <- base_de_datos %>%  filter(vacas_no_tv == "Vacas positivas sin TV")
 str(base_de_datos)
 ```
-```{r}#
-transm <- data.frame (vacas_tv = c (72.22,49.90,80.41,62.42,65.99,73.90,103.08,97.13,74.11,106.44,54.02,55.00,41.15,62.84,48.08),
-                        vacas_no_tv = c (7.77, 7.84))
+```{r}
+#transm <- data.frame (vacas_tv = c (72.22,49.90,80.41,62.42,65.99,73.90,103.08,97.13,74.11,106.44,54.02,55.00,41.15,62.84,48.08),
+                        #vacas_no_tv = c (7.77, 7.84))
 
 #realice la prueba U de Mann Whitney
- wilcox.test (vacas_tv ~ vacas_no_tv, data = transm)
+ wilcox.test (vacas_tv ~ vacas_no_tv, data = base_de_datos)
  
 ```
 
-```{r}#
-str(transm)
-```
 Transmision horizontal
 
 ```{r}
@@ -314,21 +309,63 @@ compare_performance(reg6, reg7, reg8, reg9)
 ```{r}
 car::Anova(reg6)
 ```
+```{r}
+em <- emmeans(reg6, ~ dias, type="response")
+em  %>% knitr::kable()
+class(em)
+```
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         ac = emmean)
+res
+```
+```{r}
+res %>%  
+  ggplot() +
+  aes(x=dias, y=ac)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL), 
+                  position = dodge)+
+  labs(x = "", y = "IgG (IRCP)")+  
+  geom_text(vjust=-1, angle=90, aes(label = letras), position = dodge)+
+  # geom_jitter(data = festuca, alpha=0.2, position = position_dodge(width=0.5)) +
+  theme_bw()
+
+```
 
 ```{r}
-serocon_graph2 <- 
-  ggplot(serocon_dat)+
-    aes(x=dias, y=ac)+
-      geom_jitter(width=.2, alpha=.5)+
-  stat_summary(fun = mean,  #median
-               fun.min= mean,
-               fun.max = mean,
-               geom = "crossbar", 
-               size = 0.5)+
-  ggtitle("Observaciones (jitter) & media")+
- theme_bw()+
-  geom_hline(yintercept = 6, linetype="dashed") + 
-  labs(y="IgG (IRCP)", x = "Días desde nacimiento")
-serocon_graph2
+serocon_dat <- serocon %>% 
+  pivot_longer(cols = ac_0:ac_63, 
+              names_prefix= "ac_", 
+               names_to = "dias", 
+                values_to = "ac")  %>% 
+   mutate_at(vars(dias), as.numeric) %>% 
+  mutate_at(vars(id_ternero, trat, sexo), as.factor)
+  #select(id_ternero, trat, sexo,  ac_0) %>% 
+  #mutate(binom_ac_vaca  = ifelse(ac_vaca >= 6,1,0))  
+  # filter(ac<100) %>%
+  # filter(dias<250) 
+serocon_dat
+```
+```{r}
+correlacion<-serocon_dat %>%  select(ac, dias)
+correlacion
+long_corr <- correlacion %>% 
+  correlation (method = "spearman")
+long_corr
+```
 
+
+```{r}
+long_corr2 <- correlacion %>% 
+  correlation (method = "pearson")
+long_corr2
+  
+```
   
