@@ -3,7 +3,6 @@ title: "Neospora"
 output: html_document
 ---
 
-
 ```{r setup global del informe, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, 
                       warning = FALSE, 
@@ -12,10 +11,10 @@ knitr::opts_chunk$set(echo = TRUE,
 
 ```{r paquetes}
 pacman::p_load(tidyverse, lubridate, janitor)
- pacman::p_load(GGally, correlation, ggcorrplot, viridis)
- pacman::p_load(cowplot)
+pacman::p_load(GGally, correlation, ggcorrplot, viridis) 
+pacman::p_load(cowplot)
 pacman::p_load(lme4, performance, skimr, emmeans, multcomp, sjPlot) 
-install.packages("multcompView") # solo una vez y no hace falta cargarlo
+#install.packages("multcompView") # solo una vez y no hace falta cargarlo
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
 ```
@@ -66,7 +65,6 @@ ac_dat %>%
   labs(y="IgG (IRCP)", x = "Días desde nacimiento")
 ```
 
-
 ```{r}
 ac_dat %>% 
   ggplot()+
@@ -81,8 +79,7 @@ ac_dat %>%
   labs(y="IgG (IRCP)", x = "Días desde nacimiento")
 ```
 
-
-Ajustaremos un modelo mixto que contemple las medidas repetidas en el tiempo sobre una misma unidad experimental, para ello le asignamos el efecto aleatorio a la misma.    
+Ajustaremos un modelo mixto que contemple las medidas repetidas en el tiempo sobre una misma unidad experimental, para ello le asignamos el efecto aleatorio a la misma.
 
 ```{r}
 m1 <- glmer(binom_ac ~ dias * trat * sexo + (1|id_ternero), data=ac_dat)
@@ -92,9 +89,11 @@ m4 <- glmer(binom_ac ~ trat  + (1|id_ternero), data=ac_dat)
 m5 <- glmer(binom_ac ~ sexo  + (1|id_ternero), data=ac_dat)
 compare_performance(m1,m2,m3,m4,m5)
 ```
+
 ```{r}
 car::Anova(m1)
 ```
+
 ```{r}
 car::Anova(m3)
 ```
@@ -132,6 +131,10 @@ m6 <- lm(peso_1 ~ ac_vaca, data=ac_vaca_dat[-c(23), ] )
 plot(m6)
 ```
 ```{r}
+car::Anova(m6)
+```
+
+```{r}
 m7 <- lm(peso_1 ~ ac_vaca*sexo, data=ac_vaca_dat[-c(23), ] )
 plot(m7)
 
@@ -140,13 +143,16 @@ plot(m7)
 ```{r}
 anova(m6)
 ```
+
 ```{r}
-anova(m7)
+m7 <- lm(peso_1 ~ ac_vaca*sexo, data=ac_vaca_dat[-c(23), ] )
+car::Anova(m7)
 ```
 
 ```{r}
 summary(m6)
 ```
+
 ```{r}
 ac_vaca_dat %>% 
   # slice(-c(23)) %>%
@@ -170,19 +176,24 @@ compare_performance(m8,m9,m10)
 ```{r}
 check_heteroscedasticity(m8)
 ```
+
 ```{r}
 check_normality(m8)
 ```
+
 ```{r}
 anova(m8)
 ```
+
 Voy a realizar la prueba U de Mann-Whitney para comparar diferencias entre las madres positivas que tubieron hijos positivos a Neospora y las madres positivas que tubieron hijos seronegativos para Neospora
+
 ```{r}
 library(readxl)
 pacman::p_load(readxl)
 library(stats)
 pacman::p_load(stats)
 ```
+
 ```{r}
 transm <- rio::import("../data/transmision verticas.xlsx")%>%
   clean_names()
@@ -190,18 +201,19 @@ transm %>% str
 transm %>% head 
 
 ```
+
 ```{r}
-base_de_datos <- read_excel("../data/transmision verticas.xlsx")
-vacas_tv <- base_de_datos %>% filter(vacas_tv == "Vacas positivas con TV")
-vacas_no_tv <- base_de_datos %>%  filter(vacas_no_tv == "Vacas positivas sin TV")
-str(base_de_datos)
+#base_de_datos <- read_excel("../data/transmision verticas.xlsx")
+#vacas_tv <- base_de_datos %>% filter(vacas_tv == "Vacas positivas con TV")
+#vacas_no_tv <- base_de_datos %>%  filter(vacas_no_tv == "Vacas positivas sin TV") +
 ```
+
 ```{r}
 #transm <- data.frame (vacas_tv = c (72.22,49.90,80.41,62.42,65.99,73.90,103.08,97.13,74.11,106.44,54.02,55.00,41.15,62.84,48.08),
                         #vacas_no_tv = c (7.77, 7.84))
 
 #realice la prueba U de Mann Whitney
- wilcox.test (vacas_tv ~ vacas_no_tv, data = base_de_datos)
+# wilcox.test (vacas_tv ~ vacas_no_tv, data = base_de_datos)
  
 ```
 
@@ -236,6 +248,7 @@ transm_h_dat %>%
   aes(x=dias, y=ac, col=trat)+
   geom_point(alpha=.5) +
   geom_smooth(se=T, span=1.2)+
+  geom_hline(yintercept = 6, linetype="dashed") + 
   theme_bw()
 ```
 
@@ -247,9 +260,11 @@ reg4 <- lm(ac ~ dias+sexo, data=transm_h_dat)
 compare_performance(reg1, reg2, reg3, reg4)
  
 ```
+
 ```{r}
 car::Anova(reg1)
 ```
+
 ```{r}
 transm_h_dat %>% 
   slice(-c(23)) %>%
@@ -257,8 +272,10 @@ transm_h_dat %>%
   aes(x=dias, y=ac)+
   geom_point(alpha=.5) +
   geom_smooth(se=T, span=1.2)+
+  geom_hline(yintercept = 6, linetype="dashed") + 
   theme_bw()
 ```
+
 Ahora solo considerando los que seroconvirtieron
 
 ```{r}
@@ -296,56 +313,127 @@ serocon_graph <-
   theme_bw()+
   geom_hline(yintercept = 6, linetype="dashed") + 
   labs(y="IgG (IRCP)", x = "Días desde nacimiento")
+
 serocon_graph
 ```
 
-```{r}
-reg6 <- lm(ac ~ dias, data= serocon_dat)
-reg7 <- lm(ac ~ sexo, data = serocon_dat)
-reg8 <- lm(ac ~ dias*sexo, data = serocon_dat)
-reg9 <- lm(ac ~ dias+sexo, data =serocon_dat)
-compare_performance(reg6, reg7, reg8, reg9)
+```{r}#
+serocon_dat2 <- serocon_dat %>%  
+  group_by(dias) %>% 
+  summarise(
+    mean = mean(ac),
+    sd = sd(ac))
+serocon_dat2
 ```
-```{r}
-car::Anova(reg6)
-```
-```{r}
-em <- emmeans(reg6, ~ dias, type="response")
-em  %>% knitr::kable()
-class(em)
-```
-```{r}
-res  <- cld(em, 
-            Letters = letters, 
-            alpha = .05)  
-res
-```
-```{r}
-res <- res %>% 
-  mutate(letras = str_squish(.group), 
-         ac = emmean)
-res
-```
-```{r}
-res %>%  
-  ggplot() +
-  aes(x=dias, y=ac)+
-  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL), 
-                  position = dodge)+
-  labs(x = "", y = "IgG (IRCP)")+  
-  geom_text(vjust=-1, angle=90, aes(label = letras), position = dodge)+
-  # geom_jitter(data = festuca, alpha=0.2, position = position_dodge(width=0.5)) +
-  theme_bw()
-
-```
-
 ```{r}
 serocon_dat <- serocon %>% 
   pivot_longer(cols = ac_0:ac_63, 
               names_prefix= "ac_", 
                names_to = "dias", 
                 values_to = "ac")  %>% 
-   mutate_at(vars(dias), as.numeric) %>% 
+   mutate_at(vars(dias), as.factor) %>% 
+  mutate_at(vars(id_ternero, trat, sexo), as.factor)
+  #select(id_ternero, trat, sexo,  ac_0) %>% 
+  #mutate(binom_ac_vaca  = ifelse(ac_vaca >= 6,1,0))  
+  # filter(ac<100) %>%
+  # filter(dias<250) 
+serocon_dat
+
+```
+
+```{r}
+reg6 <- lm(ac ~ dias, data= serocon_dat)
+reg7 <- lm(ac ~ id_ternero, data = serocon_dat)
+reg8 <- lm(ac ~ dias*id_ternero, data = serocon_dat)
+reg9 <- lm(ac ~ dias+id_ternero, data = serocon_dat)
+compare_performance(reg6, reg7, reg8, reg9)
+```
+
+```{r}
+anova(reg6)
+```
+
+```{r}#
+serocon_dat %>% 
+  janitor::tabyl(dias)
+
+```
+```{r}
+serocon_dat %>% 
+  group_by(dias) %>% 
+  summarise(
+    n = sum(!is.na(ac)), 
+    ac = mean(ac),
+    sd = sd(ac))
+serocon_dat
+```
+
+
+```{r}
+dodge <- position_dodge(width = 0.5)
+
+serocon_dat %>% 
+  ggplot()  +
+  aes(x = dias, y = ac) + 
+  geom_point(position = dodge)
+
+```
+
+```{r}
+geom_point(position = dodge)
+```
+
+```{r}
+library(ggplot2)
+library(reshape2)
+
+```
+```{r}
+em <- emmeans(reg6, ~ dias, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+
+```{r}
+?pwpm
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         ac = emmean)
+res
+```
+
+```{r}
+res %>%  
+  ggplot() +
+  aes(x=dias, y=ac)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  labs(x = "Dias de vida", y = "IgG (IRPC)")+  
+  geom_text(aes(label = letras), angle=90, vjust=-1)+
+  geom_jitter(data = serocon_dat, width = .1, alpha=.5) +
+  theme_bw()
+```
+
+
+```{r}
+
+serocon_dat <- serocon %>% 
+  pivot_longer(cols = ac_0:ac_63, 
+              names_prefix= "ac_", 
+               names_to = "dias", 
+                values_to = "ac")  %>% 
+   mutate_at(vars(dias), as.factor) %>% 
   mutate_at(vars(id_ternero, trat, sexo), as.factor)
   #select(id_ternero, trat, sexo,  ac_0) %>% 
   #mutate(binom_ac_vaca  = ifelse(ac_vaca >= 6,1,0))  
@@ -353,6 +441,7 @@ serocon_dat <- serocon %>%
   # filter(dias<250) 
 serocon_dat
 ```
+
 ```{r}
 correlacion<-serocon_dat %>%  select(ac, dias)
 correlacion
@@ -361,11 +450,8 @@ long_corr <- correlacion %>%
 long_corr
 ```
 
-
 ```{r}
 long_corr2 <- correlacion %>% 
   correlation (method = "pearson")
 long_corr2
-  
 ```
-  
