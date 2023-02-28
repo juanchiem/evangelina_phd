@@ -1,0 +1,126 @@
+---
+title: "Peso ensayo 1"
+output: html_document
+---
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, lubridate, janitor)
+pacman::p_load(GGally, correlation, ggcorrplot, viridis) 
+pacman::p_load(cowplot)
+pacman::p_load(lme4, performance, skimr, emmeans, multcomp, sjPlot) 
+#install.packages("multcompView") # solo una vez y no hace falta cargarlo
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+Contexto: se da minerales y vitaminas asociados a propiedades antioxidantes a vacas en el periodo preparto y se evaluan diferentes variables en el ternero tales como peso vivo durante 9 semanas y luego a los 200 dias de vida aproximadamente 
+## Importacion de datos
+
+```{r}
+raw <- rio::import("C:/Users/juanchi/Dropbox/Doctorado/papers en proceso/tabla pesos.xlsx")%>%
+  clean_names()
+raw %>% str 
+raw %>% head 
+```
+
+
+Selecciono el peso al nacer para ver si el tratamiento en la madre afecto esta variable
+```{r}
+peso_dat <- raw %>% 
+  pivot_longer(cols = kg_0, 
+               names_prefix= "kg_", 
+               names_to = "dias", 
+               values_to = "peso")  %>% 
+  mutate_at(vars(dias), as.numeric) %>% 
+  mutate_at(vars(id_ternero, tratamiento, sexo), as.factor) %>% 
+  select(id_ternero, tratamiento, sexo, dias, peso)
+  
+peso_dat
+```
+
+
+```{r}
+peso_dat %>% str
+peso_dat %>% 
+  group_by(sexo, tratamiento) %>%  
+  skim(peso)
+```
+
+```{r}
+peso_dat %>% 
+  # filter(dias<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=dias, y=peso, col=tratamiento)+
+  geom_jitter(width=.2, alpha=.5)+
+  facet_wrap("sexo") + 
+  geom_line(stat = "summary", fun=mean)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Peso", x = "Semanas desde nacimiento")
+```
+```{r}
+m1 <- lm(peso ~ tratamiento * sexo, data=peso_dat)
+m2 <- lm(peso ~ tratamiento + sexo , data=peso_dat)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+m4 <- lm(peso ~ tratamiento  , data=peso_dat)
+m5 <- lm(peso ~ sexo  , data=peso_dat)
+compare_performance(m1,m2,m4,m5)
+
+```
+```{r}
+car::Anova(m1)
+```
+```{r}
+em <- emmeans(m1, ~ tratamiento, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+
+```{r}
+?pwpm
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         peso_nacimiento = emmean)
+res
+```
+
+```{r}
+res %>%  
+  ggplot() +
+  aes(x=tratamiento, y=peso_nacimiento)+
+   stat_summary(fun="mean", geom="point", size=2)+
+  stat_summary(fun.data = mean_se, geom = "errorbar", width=0.2)+
+  stat_summary(fun.data= mean_sdl, geom = "errorbar", color="red", width=0.2)+
+  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", color="blue", width=0.2)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  labs(x = "Tratamiento", y = "Peso al nacer, kg")+  
+  geom_text(aes(label = letras), angle=90, vjust=-1)+
+  geom_boxplot(data = res, width = .1, alpha=.5, fill="grey90") +
+  theme_bw()
+
+
+```
+
+
+
+```
+

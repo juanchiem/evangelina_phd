@@ -119,7 +119,7 @@ ac_vaca_dat
 ac_vaca_dat %>% 
   slice(-c(23)) %>%
   ggplot() + 
-  aes(x=ac_vaca, y=peso_1)+#,col=trat)+
+  aes(x=ac_vaca, y=peso_1,col=trat)+
   geom_point(alpha=.5) +
   geom_smooth(se=T, span=1.2)+
   facet_wrap("sexo") +
@@ -128,29 +128,58 @@ ac_vaca_dat %>%
 
 ```{r}
 m6 <- lm(peso_1 ~ ac_vaca, data=ac_vaca_dat[-c(23), ] )
-plot(m6)
-```
-```{r}
-car::Anova(m6)
-```
-
-```{r}
-m7 <- lm(peso_1 ~ ac_vaca*sexo, data=ac_vaca_dat[-c(23), ] )
-plot(m7)
+m7 <- lm(peso_1 ~ trat, data=ac_vaca_dat[-c(23), ] )
+m8 <- lm(peso_1 ~ sexo, data=ac_vaca_dat[-c(23), ] )
+m9 <- lm(peso_1 ~ ac_vaca+sexo, data=ac_vaca_dat [-c(23), ])
+m10 <- lm(peso_1 ~ ac_vaca*sexo, data=ac_vaca_dat [-c(23), ])
+compare_performance(m6,m7,m8,m9, m10)
 
 ```
-
 ```{r}
-anova(m6)
+car::Anova(m9)
 ```
 
 ```{r}
-m7 <- lm(peso_1 ~ ac_vaca*sexo, data=ac_vaca_dat[-c(23), ] )
-car::Anova(m7)
+summary(m9)
 ```
 
 ```{r}
-summary(m6)
+em <- emmeans(m9, ~ ac_vaca|sexo, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+
+```{r}
+?pwpm
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         peso_1 = emmean)
+res
+```
+
+```{r}
+res %>%  
+  ggplot() +
+  aes(x=ac_vaca, y=peso_1, col=sexo)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  labs(x = "IgG vaca (IRCP)", y = "Peso al nacer")+  
+  geom_text(aes(label = letras), angle=90, vjust=-1)+
+  geom_jitter(data = ac_vaca_dat, width = .1, alpha=.5) +
+  theme_bw()
+```
+
 ```
 
 ```{r}
