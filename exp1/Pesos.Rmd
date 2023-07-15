@@ -1,5 +1,5 @@
 ---
-title: "Peso ensayo 1"
+title: "Estadistica ensayo 1"
 output: html_document
 ---
 ```{r setup global del informe, include=FALSE}
@@ -18,7 +18,6 @@ conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
 ```
 
-Contexto: se da minerales y vitaminas asociados a propiedades antioxidantes a vacas en el periodo preparto y se evaluan diferentes variables en el ternero tales como peso vivo durante 9 semanas y luego a los 200 dias de vida aproximadamente 
 ## Importacion de datos
 
 ```{r}
@@ -28,57 +27,346 @@ raw %>% str
 raw %>% head 
 ```
 
+## Evaluo TAS al nacer del ternero
+```{r}
+tas <- raw %>% 
+  pivot_longer(cols = tas_0, 
+               names_prefix= "tas_", 
+               names_to = "days", 
+               values_to = "tas_nacimiento")  %>% 
+   mutate_at(vars(days), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero,cc_vaca,n_lact,  group, sex, days, tas_nacimiento, tas_vaca, tbars_vaca, tbars_0, i_os_vaca, i_os_0, n_lact)
+tas
 
-Selecciono el peso al nacer para ver si el tratamiento en la madre afecto esta variable
+```
+### Primero voy a modelar la capacidad antioxidante total del ternero si esta debida al tratamiento, sexo, tas de la vaca, cc de la vaca o numero de lactaciones de la vaca
+```{r}
+modelo1 <- lm (tas_nacimiento ~ group, data = tas)
+modelo2 <- lm (tas_nacimiento ~ sex, data= tas)
+modelo3 <- lm (tas_nacimiento ~ tas_vaca, data = tas)
+modelo4 <- lm (tas_nacimiento ~ cc_vaca, data= tas)
+modelo5 <- lm (tas_nacimiento ~ n_lact, data=tas)
+modelo6 <- lm (tas_nacimiento ~ group * sex*tas_vaca*n_lact+cc_vaca, data=tas)
+modelo7 <- lm (tas_nacimiento ~ group + sex+tas_vaca+cc_vaca+n_lact, data=tas)
+compare_performance(modelo1, modelo2, modelo3, modelo4, modelo5, modelo6, modelo7)
+```
+```{r}
+car::Anova(modelo6)
+```
+
+Vemos que la capacidad antioxidante total del ternero al nacer no esta asociada a ninguna de las otras variables.
+
+### Selecciono el peso al nacer (kg_0) para ver si el group (tratamiento) en la madre afecto esta variable en el ternero
+
 ```{r}
 peso_dat <- raw %>% 
   pivot_longer(cols = kg_0, 
                names_prefix= "kg_", 
-               names_to = "dias", 
-               values_to = "peso")  %>% 
-  mutate_at(vars(dias), as.numeric) %>% 
-  mutate_at(vars(id_ternero, tratamiento, sexo), as.factor) %>% 
-  select(id_ternero, tratamiento, sexo, dias, peso)
+               names_to = "days", 
+               values_to = "weight")  %>% 
+   mutate_at(vars(days), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero,cc_vaca,n_lact,  group, sex, days, weight, tas_vaca, tas_0, tbars_vaca, tbars_0, i_os_vaca, i_os_0, n_lact)
   
 peso_dat
 ```
-
-
 ```{r}
 peso_dat %>% str
 peso_dat %>% 
-  group_by(sexo, tratamiento) %>%  
-  skim(peso)
+  group_by(sex, group, cc_vaca, n_lact) %>%  
+  skim(weight)
 ```
 
 ```{r}
 peso_dat %>% 
-  # filter(dias<250) %>% 
+  # filter(days<250) %>% 
   # filter(ac<100) %>% 
   ggplot()+
-  aes(x=dias, y=peso, col=tratamiento)+
+  aes(x=tas_vaca, y=weight) +
   geom_jitter(width=.2, alpha=.5)+
-  facet_wrap("sexo") + 
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "errorbar", 
+               size = 0.5)+
+                 #facet_wrap(~group)+
+  geom_line(stat = "summary", fun=mean)+
+  geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Birth weight, kg", x = "TAS_cow")
+```
+Veremos ocurre con relacion al peso al nacer
+```{r}
+m1 <- lm(weight ~ sex*tas_vaca*n_lact+cc_vaca, data=peso_dat)
+m2 <- lm(weight ~ sex+n_lact+tas_vaca+cc_vaca, data=peso_dat)
+m3 <- lm(weight ~ n_lact, data=peso_dat)
+m4 <- lm(weight ~ group, data=peso_dat)
+m5 <- lm(weight ~ sex, data=peso_dat)
+m6 <- lm(weight ~ tas_vaca, data=peso_dat)
+m7 <- lm(weight ~ tas_0, data = peso_dat)
+m8 <- lm(weight ~ cc_vaca, data = peso_dat)
+m9 <- lm(weight~ i_os_vaca, data = peso_dat)
+m10 <-lm(weight ~ i_os_0, data = peso_dat)
+compare_performance(m1,m2,m3,m4,m5,m6,m7, m8, m9, m10)
+```
+
+```{r}
+car::Anova(m6)
+
+```
+```{r}
+summary(m6)
+```
+
+Por cada aumento en el TAS de la madre, aumenta en 1.0708 el peso al nacer del ternero
+
+```{r}
+em <- emmeans(m6, ~ tas_vaca, type="response")
+em  %>% knitr::kable()
+class(em)
+```
+
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+
+res
+```
+
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         birth_weight = emmean)
+res
+```
+
+### Selecciono el peso a la salida de la estaca (kg_9) para ver  si el group  en la madre afecto esta variable, o el sexo, tas, tbars o el indice de estres oxidativo
+
+```{r}
+peso_dat2 <- raw %>% 
+  pivot_longer(cols = kg_9, 
+               names_prefix= "kg_", 
+               names_to = "days", 
+               values_to = "final_weight")  %>% 
+  mutate_at(vars(days), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero, group, sex, days, final_weight, dias_diarrea, kg_0, tas_0, tas_14, tas_63, tas_vaca, tbars_vaca, tbars_0, tbars_14, tbars_63, i_os_vaca, i_os_0, i_os_14, i_os_63)
+  
+peso_dat2
+
+```
+```{r}
+peso_dat2 %>% str
+peso_dat2 %>% 
+  group_by(sex, group) %>%  
+  skim(final_weight)
+```
+
+```{r}
+peso_dat2 %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=sex, y=final_weight)+
+  geom_jitter(width=.2, alpha=.5)+
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "crossbar", 
+               size = 0.5)+
+facet_wrap(~group)+
   geom_line(stat = "summary", fun=mean)+
   # geom_line(stat = "summary", fun=median)+
   # geom_smooth(se=F, method = "lm")+
   theme_bw()+
-  labs(y="Peso", x = "Semanas desde nacimiento")
+  labs(y="Final weight, kg", x = "Sex")
+
 ```
+
 ```{r}
-m1 <- lm(peso ~ tratamiento * sexo, data=peso_dat)
-m2 <- lm(peso ~ tratamiento + sexo , data=peso_dat)
-#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
-m4 <- lm(peso ~ tratamiento  , data=peso_dat)
-m5 <- lm(peso ~ sexo  , data=peso_dat)
-compare_performance(m1,m2,m4,m5)
+m6 <- lm(final_weight ~ group * sex + kg_0 + dias_diarrea+tas_0+tas_14+ tbars_0+ tbars_14+ tbars_63+ i_os_vaca+ i_os_0+ i_os_14+ i_os_63, data=peso_dat2)
+m7 <- lm(final_weight ~  kg_0 +tas_0+ tbars_0+ tbars_14+ tbars_63+ i_os_vaca+ i_os_0+ i_os_14+ i_os_63, data=peso_dat2)
+#m8 <- lm(weight ~(1|id_ternero), data=peso_dat2)
+m9 <- lm(final_weight ~ group   , data=peso_dat2)
+m10 <- lm(final_weight ~ sex  , data=peso_dat2)
+m11 <- lm(final_weight ~ kg_0, data=peso_dat2)
+m12 <- lm(final_weight ~ dias_diarrea, data=peso_dat2)
+m13 <- lm(final_weight ~ tas_0, data=peso_dat2)
+m14 <- lm(final_weight ~ tas_vaca, data=peso_dat2)
+m15 <- lm(final_weight ~ tas_14, data=peso_dat2)
+m16 <- lm(final_weight ~ tas_63, data=peso_dat2)
+m17 <- lm(final_weight ~ tbars_vaca, data=peso_dat2)
+m18 <- lm(final_weight ~ tbars_0, data=peso_dat2)
+m19 <- lm(final_weight ~ tbars_14, data=peso_dat2)
+m20 <- lm(final_weight ~ tbars_63, data=peso_dat2)
+m21 <- lm(final_weight ~ i_os_vaca, data=peso_dat2)
+m22 <- lm(final_weight ~ i_os_0, data=peso_dat2)
+m23 <- lm(final_weight ~ i_os_14, data=peso_dat2)
+m24 <- lm(final_weight ~ i_os_63, data=peso_dat2)
+m25 <- lm(final_weight ~ kg_0, data=peso_dat2)
+m26 <- lm(final_weight ~ dias_diarrea, data = peso_dat2)
+compare_performance(m6,m7,m9, m10, m11, m12, m14,m15,m16, m17,m18,m19,m20, m21, m22,m23,m24, m25, m26)
 
 ```
 ```{r}
-car::Anova(m1)
+
+car::Anova(m7)
+```
+
+El peso al final del ensayo (semana 9)  esta afectado por el peso a nacer del animal, y hay una tendencia en el tas al nacer y el indice de estres oxidativo en la semana 9 (i_os_63)
+ 
+```{r}
+summary(m7)
+```
+ 
+```{r}
+em <- emmeans(m6, ~ kg_0, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+
+```
+
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         Final_weight = emmean)
+res
+
+```
+
+### A continuacion evaluare como evolucionan los pesos atraves del tiempo segun el group (tratamiento)
+
+```{r}
+peso_dat3 <- raw %>% 
+  pivot_longer(cols = kg_0:kg_9, 
+               names_prefix= "kg_", 
+               names_to = "days", 
+               values_to = "weight")  %>% 
+  mutate_at(vars(days), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero, group, sex, days, weight, cc_vaca, dias_diarrea)
+  
+peso_dat3
 ```
 ```{r}
-em <- emmeans(m1, ~ tratamiento, type="response")
+peso_dat3 %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+   group_by(id_ternero) %>%
+   ggplot()+
+  aes(x=days, y=weight, col=group)+
+  geom_jitter(width=.2, alpha=.9)+
+  
+  geom_line(stat = "summary", fun=mean)+
+ #geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Body weight (kg)", x = "Weeks from birth")
+
+```
+```{r}
+peso_dat3 %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+   group_by(id_ternero) %>%
+   ggplot()+
+  aes(x=days, y=weight, col=group)+
+  #geom_jitter(width=.2, alpha=.9)+
+  
+  geom_line(stat = "summary", fun=mean)+
+ #geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Body weight (kg)", x = "Weeks from birth")+
+  scale_x_continuous(breaks = c(0:9),
+                   labels = c("0","1", "2", "3", "4", "5", "6", "7", "8", "9"))
+  
+```
+```{r}
+peso_dat4<-peso_dat3 %>% 
+  mutate(as.factor(days))
+peso_dat4
+```
+
+```{r}
+r1 <- lm (weight ~ as.factor(days)*group+ cc_vaca + dias_diarrea, data = peso_dat4)
+r2 <- lm (weight ~ as.factor(days)*group*sex + cc_vaca + dias_diarrea, data = peso_dat4)
+r3 <- lm (weight ~ as.factor(days)+ cc_vaca + dias_diarrea, data = peso_dat4)
+compare_performance(r1,r2,r3)
+
+```
+```{r}
+car::Anova(r2)
+```
+
+```{r}
+summary(r2)
+```
+
+```{r}
+em <- emmeans(r2, ~ as.factor(days)|group, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         Final_weight = emmean)
+res
+```
+```{r}
+em <- emmeans(r2, ~ group, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         Final_weight = emmean)
+res
+```
+```{r}
+em <- emmeans(r2, ~ group|as.factor(days), type="response")
 em  %>% knitr::kable()
 class(em)
 
@@ -92,35 +380,790 @@ res
 ```
 
 ```{r}
-?pwpm
 pwpm(em, adjust = "none")
 ```
 
 ```{r}
 res <- res %>% 
   mutate(letras = str_squish(.group), 
-         peso_nacimiento = emmean)
+         Final_weight = emmean)
+res
+
+
+```
+
+### Ahora evaluare la capacidad antioxidante de los terneros en los diferentes momentos de muestreo
+
+```{r}
+antiestres <- raw %>% 
+  pivot_longer(cols = tas_0:tas_63, 
+               names_prefix= "tas_", 
+               names_to = "days", 
+               values_to = "tas")  %>% 
+  mutate_at(vars(days), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero, group, sex,days, cc_vaca, dias_diarrea, tas)
+  
+antiestres
+```
+```{r}
+antiestres %>% 
+   group_by(id_ternero) %>%
+   ggplot()+
+  aes(x=days, y=tas, col=group)+
+  geom_jitter(width=.2, alpha=.9)+
+  
+  geom_line(stat = "summary", fun=mean)+
+ #geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Total antioxidant status", x = "Days")
+
+```
+```{r}
+m1<-lm(tas~group, data = antiestres)
+m2<-lm(tas~days, data = antiestres)
+m3<-lm(tas~sex, data = antiestres)
+m4<-lm(tas~group*days*sex, data = antiestres)
+m5<-lm(tas~group+days+sex, data = antiestres)
+compare_performance(m1,m2,m3,m4,m5)
+```
+```{r}
+car::Anova(m4)
+```
+```{r}
+summary(m4)
+```
+```{r}
+estres <- raw %>% 
+  pivot_longer(cols = tbars_0:tbars_63, 
+               names_prefix= "tbars_", 
+               names_to = "days", 
+               values_to = "tbars")  %>% 
+  mutate_at(vars(days), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero, group, sex, days, cc_vaca, dias_diarrea, tbars)
+  
+estres
+```
+```{r}
+estres %>% 
+   group_by(id_ternero) %>%
+   ggplot()+
+  aes(x=days, y=tbars, col=group)+
+  geom_jitter(width=.2, alpha=.9)+
+  
+  geom_line(stat = "summary", fun=mean)+
+ #geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Oxidant measured as TBARS", x = "Days")
+
+```
+```{r}
+m1<-lm(tbars~group, data = estres)
+m2<-lm(tbars~days, data = estres)
+m3<-lm(tbars~sex, data = estres)
+m4<-lm(tbars~group*days*sex, data = estres)
+m5<-lm(tbars~group+days+sex, data = estres)
+compare_performance(m1,m2,m3,m4,m5)
+```
+  
+```{r}
+car::Anova(m5)
+```
+```{r}
+summary(m5)
+```
+
+```{r}
+ios<- raw %>% 
+  pivot_longer(cols = i_os_0:i_os_63, 
+               names_prefix= "i_os_", 
+               names_to = "days", 
+               values_to = "ios")  %>% 
+  mutate_at(vars(days), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero, group, sex, days, cc_vaca, dias_diarrea, ios)
+  
+ios
+```
+```{r}
+ios %>% 
+   group_by(id_ternero) %>%
+   ggplot()+
+  aes(x=days, y=ios, col=group)+
+  geom_jitter(width=.2, alpha=.9)+
+  
+  geom_line(stat = "summary", fun=mean)+
+ #geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Oxidative stress index (TBARS/TAS)", x = "Days")
+
+```
+```{r}
+m1<-lm(ios~group, data = ios)
+m2<-lm(ios~days, data = ios)
+m3<-lm(ios~sex, data = ios)
+m4<-lm(ios~group*days*sex, data = ios)
+m5<-lm(ios~group+days+sex, data = ios)
+compare_performance(m1,m2,m3,m4,m5)
+```
+```{r}
+car::Anova(m5)
+```
+```{r}
+summary(m5)
+```
+```{r}
+car::Anova(m1)
+```
+```{r}
+em <- emmeans(m5, ~ group, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         Oxidative_stres_index = emmean)
 res
 ```
 
 ```{r}
-res %>%  
-  ggplot() +
-  aes(x=tratamiento, y=peso_nacimiento)+
-   stat_summary(fun="mean", geom="point", size=2)+
-  stat_summary(fun.data = mean_se, geom = "errorbar", width=0.2)+
-  stat_summary(fun.data= mean_sdl, geom = "errorbar", color="red", width=0.2)+
-  stat_summary(fun.data = mean_cl_boot, geom = "errorbar", color="blue", width=0.2)+
-  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
-  labs(x = "Tratamiento", y = "Peso al nacer, kg")+  
-  geom_text(aes(label = letras), angle=90, vjust=-1)+
-  geom_boxplot(data = res, width = .1, alpha=.5, fill="grey90") +
-  theme_bw()
+eq1<-lm(dias_diarrea~tas, data = antiestres)
+eq2<-lm(dias_diarrea~tbars, data = estres)
+eq3<-lm(dias_diarrea~ios, data = ios)
+compare_performance(eq1,eq2,eq3)
+```
 
+```{r}
+car::Anova(eq2)
+```
+
+
+
+Voy a evaluar la GDP
+```{r}
+gdp <- raw %>% 
+  mutate(gdp_0_1 = (kg_1-kg_0) / 7,
+  gdp_1_2= (kg_2-kg_1)/7,
+  gdp_2_3= (kg_3-kg_2)/7,
+  gdp_3_4= (kg_4-kg_3)/7,
+  gdp_4_5= (kg_5-kg_4)/7,
+  gdp_5_6= (kg_6-kg_5)/7,
+  gdp_6_7= (kg_7-kg_6)/7,
+  gdp_7_8= (kg_8-kg_7)/7, 
+  gdp_8_9= (kg_9-kg_8)/7)
+head(gdp)
+```
+```{r}
+gdp_1 <- gdp %>% 
+  pivot_longer(cols = gdp_1_2 : gdp_8_9, 
+               names_prefix= "gdp_", 
+               names_to = "week", 
+               values_to = "gdp")  %>% 
+  mutate_at(vars(week), as.factor) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero, group, sex, week, gdp, cc_vaca, kg_0, dias_diarrea, tas_vaca, tas_0, tas_14, tas_vaca, tbars_vaca, tbars_0, tbars_14, tbars_63, i_os_vaca, i_os_0, i_os_14, i_os_63)
+  
+gdp_1
+```
+```{r}
+gdp_1 %>% 
+   group_by(id_ternero) %>%
+   ggplot()+
+  aes(x=week, y=gdp, col=group)+
+  #geom_jitter(width=.2, alpha=.5)+
+  geom_line(stat = "summary", fun=mean)+
+    stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               sd = sd,
+               geom = "crossbar", 
+               size = 0.5)+
+    theme_bw()+
+  labs(y="Average daily gain (g/d)", x = "Weeks from birth")
+  #scale_x_continuous(breaks = c(0:9),
+                #   labels = c("0","1", "2", "3", "4", "5", "6", "7", "8", "9"))
+```
+```{r}
+m1 <- lm (gdp ~ week*sex+cc_vaca+dias_diarrea+ tas_vaca+ tbars_14+ tbars_63+ i_os_63, data = gdp_1)
+m2 <- lm (gdp ~ week*group*sex+cc_vaca+dias_diarrea+tas_vaca+ tas_0+ tas_14+ tas_vaca+ tbars_vaca+ tbars_14+ tbars_63+ i_os_vaca+ i_os_0+ i_os_14+ i_os_63, data = gdp_1)
+m3 <- lm (gdp ~ week+cc_vaca+dias_diarrea, data = gdp_1)
+m4 <- lm(gdp ~ group*sex, data = gdp_1)
+compare_performance(m1,m2,m3, m4)
+
+```
+```{r}
+car::Anova(m1)
+```
+```{r}
+summary(m1)
+```
+A continuacion realizare la evaluacion de consumo total (leche+conccentrado)
+```{r}
+consumo_total <- raw %>% 
+  pivot_longer(cols = cct_1:cct_9, 
+               names_prefix= "cct_", 
+               names_to = "weeks", 
+               values_to = "total_intake")  %>% 
+  mutate_at(vars(weeks), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero,group, sex, weeks, dias_diarrea, total_intake)
+  
+consumo_total
+```
+```{r}
+consumo_total %>% str
+consumo_total %>% 
+  group_by(sex, group) %>%  
+  skim(total_intake)
+```
+
+```{r}
+consumo_total %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=weeks, y=total_intake, col=group)+
+  #geom_jitter(width=.2, alpha=.5)+
+  #geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 1.5)+
+facet_wrap(~sex)+
+    geom_line(stat = "summary", fun=mean)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  scale_x_continuous(breaks = c(1:9),
+    labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"))+
+  labs(y="Total intake, g/d", x = "Weeks from birth")
+   
+```
+```{r}
+ggsave(last_plot(), file="plots/Total_intake.tiff", 
+       w=80, h=50, units="mm", dpi=300)
+```
+
+```{r}
+mod1 <- lm(total_intake ~ group * weeks+sex+dias_diarrea, data=consumo_total)
+mod2 <- lm(total_intake ~ group + sex+weeks+dias_diarrea , data=consumo_total)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+mod4 <- lm(total_intake ~ group  , data=consumo_total)
+mod5 <- lm(total_intake ~ sex  , data=consumo_total)
+compare_performance(mod1,mod2,mod4,mod5)
+
+```
+```{r}
+car::Anova(mod1)
+```
+```{r}
+em <- emmeans(mod1, ~ group, type="response")
+em  %>% knitr::kable()
+class(em)
 
 ```
 
 
 
+A conticuancion sigue el analisis del consumo solo de concentrado
+```{r}
+consumo_concentrado <- raw %>% 
+  pivot_longer(cols = cc_1:cc_9, 
+               names_prefix= "cc_", 
+               names_to = "weeks", 
+               values_to = "starter_intake")  %>% 
+  mutate_at(vars(weeks), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero,group, sex, weeks, dias_diarrea, starter_intake)
+  
+consumo_concentrado
 ```
+```{r}
+consumo_concentrado %>% str
+consumo_concentrado %>% 
+  group_by(sex, group) %>%  
+  skim(starter_intake)
+```
+
+```{r}
+consumo_concentrado %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=weeks, y=starter_intake, col=group)+
+  #geom_jitter(width=.2, alpha=.5)+
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 1.5)+
+facet_wrap(~sex)+
+  geom_line(stat = "summary", fun=mean)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  scale_x_continuous(breaks = c(1:9),
+    labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"))+
+  labs(y="Starter intake, g/d", x = "Weeks from birth")
+```
+```{r}
+ggsave(last_plot(), file="plots/Starter_intake.tiff", 
+       w=80, h=50, units="mm", dpi=300)
+
+```
+
+
+```{r}
+mod1 <- lm(starter_intake ~ group * weeks*sex+dias_diarrea, data=consumo_concentrado)
+mod2 <- lm(starter_intake ~ group + sex+weeks+dias_diarrea , data=consumo_concentrado)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+mod4 <- lm(starter_intake ~ group  , data=consumo_concentrado)
+mod5 <- lm(starter_intake ~ sex  , data=consumo_concentrado)
+compare_performance(mod1,mod2,mod4,mod5)
+
+```
+```{r}
+car::Anova(mod1)
+```
+
+
+Gain to feed ratio
+
+```{r}
+head(raw)
+```
+
+```{r}
+gaintofeed_dat<- raw %>% 
+  pivot_longer(cols = gaintofeed1:gaintofeed9, 
+               names_prefix= "gaintofeed", 
+               names_to = "weeks", 
+               values_to = "gaintofeed")  %>% 
+  mutate_at(vars(weeks), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero,group, sex, weeks, dias_diarrea, gaintofeed)
+  
+gaintofeed_dat
+```
+```{r}
+gaintofeed_dat %>% str
+gaintofeed_dat %>% 
+  group_by(sex, group) %>%  
+  skim(gaintofeed)
+```
+
+```{r}
+gaintofeed_dat %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=weeks, y=gaintofeed, col=group)+
+  #geom_jitter(width=.2, alpha=.5)+
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 1.5)+
+facet_wrap(~sex)+
+  geom_line(stat = "summary", fun=mean)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  scale_x_continuous(breaks = c(1:9),
+    labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"))+
+  labs(y="Gain to feed ratio, g/gMS", x = "Weeks from birth")
+```
+```{r}
+ggsave(last_plot(), file="plots/Gain to feed.tiff", 
+       w=80, h=50, units="mm", dpi=300)
+
+```
+
+
+```{r}
+mod1 <- lm(gaintofeed ~ group * weeks*sex+dias_diarrea, data=gaintofeed_dat)
+mod2 <- lm(gaintofeed ~ group + sex+weeks+dias_diarrea , data=gaintofeed_dat)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+mod4 <- lm(gaintofeed ~ group  , data=gaintofeed_dat)
+mod5 <- lm(gaintofeed ~ sex  , data=gaintofeed_dat)
+compare_performance(mod1,mod2,mod4,mod5)
+
+```
+```{r}
+car::Anova(mod1)
+```
+
+Feed to gain ratio
+
+```{r}
+feedtogain_dat<- raw %>% 
+  pivot_longer(cols = feedtogain1:feedtogain9, 
+               names_prefix= "feedtogain", 
+               names_to = "weeks", 
+               values_to = "feedtogain")  %>% 
+  mutate_at(vars(weeks), as.numeric) %>% 
+  mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero,group, sex, weeks, dias_diarrea, feedtogain)
+  
+feedtogain_dat
+```
+```{r}
+feedtogain_dat %>% str
+feedtogain_dat %>% 
+  group_by(sex, group) %>%  
+  skim(feedtogain)
+```
+
+```{r}
+feedtogain_dat %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=weeks, y=feedtogain, col=group)+
+  #geom_jitter(width=.2, alpha=.5)+
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 1.5)+
+facet_wrap(~sex)+
+  geom_line(stat = "summary", fun=mean)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  scale_x_continuous(breaks = c(1:9),
+    labels = c("1", "2", "3", "4", "5", "6", "7", "8", "9"))+
+  labs(y="Feed to gain, gMS/g", x = "Weeks from birth")
+```
+```{r}
+ggsave(last_plot(), file="plots/Feed to gain.tiff", 
+       w=80, h=50, units="mm", dpi=300)
+
+```
+
+
+```{r}
+mod1 <- lm(feedtogain ~ group + weeks+sex, data=feedtogain_dat)
+mod2 <- lm(feedtogain ~ group + sex+weeks+dias_diarrea , data=feedtogain_dat)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+mod4 <- lm(feedtogain ~ group  , data=feedtogain_dat)
+mod5 <- lm(feedtogain ~ sex  , data=feedtogain_dat)
+compare_performance(mod1,mod2,mod4,mod5)
+
+```
+```{r}
+car::Anova(mod1)
+```
+
+Analisis de parametros de salud (inicio de diarrea, duracion, numero de episodios)
+
+```{r}
+head(raw)
+```
+
+```{r}
+diarrea_dat<- raw %>% 
+    mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero,group, sex, cc_vaca, dias_diarrea, n_episodios, inicio_diarrea_dias, neumonia, anti_diarrea, anti_neumonia, tas_0, tas_vaca, tas_14, tas_63, tbars_vaca, tbars_0, tbars_14, tbars_63, i_os_vaca, i_os_0, i_os_14, i_os_63)
+  
+diarrea_dat
+```
+```{r}
+diarrea_dat %>% str
+diarrea_dat %>% 
+  group_by(sex, group) %>%  
+  skim(dias_diarrea)
+
+```
+
+```{r}
+diarrea_dat %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=sex, y=dias_diarrea)+
+  #geom_jitter(width=.2, alpha=.5)+
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 1.5)+
+  geom_line(stat = "summary", fun=mean)+
+  facet_wrap(~group)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Duration of diarrhea", x = "Group")
+```
+```{r}
+ggsave(last_plot(), file="plots/Duracion de la diarrea.tiff", 
+       w=80, h=50, units="mm", dpi=300)
+
+```
+
+
+```{r}
+mod1 <- lm(dias_diarrea ~ group + cc_vaca + sex + inicio_diarrea_dias+ tas_0+tas_14+tbars_0+tbars_14+i_os_0+i_os_14, data=diarrea_dat)
+mod2 <- lm(dias_diarrea ~ group * cc_vaca * sex * inicio_diarrea_dias* tas_0*tas_14*tbars_0*tbars_14*i_os_0*i_os_14, data=diarrea_dat)
+mod3 <- lm(dias_diarrea ~ group, data = diarrea_dat)
+mod4 <- lm(dias_diarrea ~ sex, data=diarrea_dat)
+mod4 <- lm(dias_diarrea~tas_0, data = diarrea_dat)
+mod5 <- lm(dias_diarrea~tas_14, data = diarrea_dat)
+mod6 <- lm(dias_diarrea~tbars_0, data = diarrea_dat)
+mod7 <- lm(dias_diarrea~tbars_14, data = diarrea_dat)
+mod8 <- lm(dias_diarrea~i_os_0, data = diarrea_dat)
+mod9 <- lm(dias_diarrea ~ i_os_14, data= diarrea_dat)
+compare_performance(mod1, mod2, mod3, mod4, mod5, mod6, mod7, mod8, mod9)
+```
+```{r}
+car::Anova(mod1)
+```
+Inicio del primer episodio de diarrea
+```{r}
+
+mod1 <- lm(inicio_diarrea_dias ~ group + cc_vaca + sex +tas_0+tbars_0+i_os_0, data=diarrea_dat)
+mod2 <- lm(inicio_diarrea_dias ~ group * cc_vaca * sex *  tas_0*tbars_0*i_os_0, data=diarrea_dat)
+mod3 <- lm(inicio_diarrea_dias ~ group, data = diarrea_dat)
+mod4 <- lm(inicio_diarrea_dias ~ sex, data=diarrea_dat)
+mod5 <- lm(inicio_diarrea_dias~tas_0, data = diarrea_dat)
+mod6 <- lm(inicio_diarrea_dias~tbars_0, data = diarrea_dat)
+mod7 <- lm(inicio_diarrea_dias~i_os_0, data = diarrea_dat)
+
+compare_performance(mod1, mod2, mod3, mod4, mod5, mod6, mod7)
+
+```
+```{r}
+car::Anova(mod6)
+```
+
+
+```{r}
+diarrea_dat %>% str
+diarrea_dat %>% 
+  group_by(sex, group) %>%  
+  skim(inicio_diarrea_dias)
+
+```
+
+```{r}
+diarrea_dat %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=group, y=inicio_diarrea_dias)+
+  #geom_jitter(width=.2, alpha=.5)+
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 1.5)+
+  geom_line(stat = "summary", fun=mean)+
+  #facet_wrap(~group)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Days to the first episode of diarrhea", x = "Group")
+```
+```{r}
+modelo1 <- lm (inicio_diarrea_dias~group, data= diarrea_dat)
+modelo2 <- lm (inicio_diarrea_dias~sex, data= diarrea_dat)
+modelo3 <- lm (inicio_diarrea_dias~tas_0, data= diarrea_dat)
+modelo4 <- lm (inicio_diarrea_dias~tbars_0, data= diarrea_dat)
+modelo5 <- lm (inicio_diarrea_dias~i_os_0, data= diarrea_dat)
+modelo6 <- lm (inicio_diarrea_dias~group*sex*tas_0*tbars_0*i_os_0, data= diarrea_dat)
+modelo7 <- lm (inicio_diarrea_dias~group+sex+tas_0+tbars_0+i_os_0, data= diarrea_dat)
+compare_performance (modelo1, modelo2, modelo3, modelo4, modelo5, modelo6, modelo7)
+```
+
+```{r}
+ggsave(last_plot(), file="plots/Inicio de la diarrea.tiff", 
+       w=80, h=50, units="mm", dpi=300)
+
+```
+
+Numero de episodios de diarrea
+
+```{r}
+
+diarrea_dat %>% 
+  group_by(sex, group) %>%  
+  skim(n_episodios)
+
+```
+
+```{r}
+diarrea_dat %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=sex, y=n_episodios, col=group)+
+  #geom_jitter(width=.2, alpha=.5)+
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 1.5)+
+  geom_line(stat = "summary", fun=mean)+
+  #facet_wrap(~group)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="Number of episodes of diarrhea", x = "Group")
+```
+```{r}
+ggsave(last_plot(), file="plots/Numero de episodios de diarrea.tiff", 
+       w=80, h=50, units="mm", dpi=300)
+
+```
+
+```{r}
+head(diarrea_dat)
+```
+
+```{r}
+mod1 <- lm(n_episodios ~ group + cc_vaca + sex +  dias_diarrea + inicio_diarrea_dias, data=diarrea_dat)
+#mod2 <- lm(feedtogain ~ group + sex+weeks+dias_diarrea , data=feedtogain_dat)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+#mod4 <- lm(feedtogain ~ group  , data=feedtogain_dat)
+#mod5 <- lm(feedtogain ~ sex  , data=feedtogain_dat)
+#compare_performance(mod1,mod2,mod4,mod5)
+
+```
+```{r}
+car::Anova(mod1)
+```
+```{r}
+em <- emmeans(mod1, ~ group, type="response")
+em  %>% knitr::kable()
+class(em)
+
+
+```
+Inicio del primer episodio de diarrea
+```{r}
+diarrea_dat<- raw %>% 
+    mutate_at(vars(id_ternero, group, sex), as.factor) %>% 
+  select(id_ternero,group, sex, cc_vaca, dias_diarrea, n_episodios, inicio_diarrea_dias, neumonia, anti_diarrea, anti_neumonia)
+  
+diarrea_dat
+```
+```{r}
+diarrea_dat %>% str
+diarrea_dat %>% 
+  group_by(sex, group) %>%  
+  skim(inicio_diarrea_dias)
+
+```
+
+```{r}
+diarrea_dat %>% 
+  # filter(days<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=group, y=inicio_diarrea_dias)+
+  #geom_jitter(width=.2, alpha=.5)+
+  geom_point(shape = 1, alpha=0.2)+
+  stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 1.5)+
+  geom_line(stat = "summary", fun=mean)+
+  #facet_wrap(~group)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  labs(y="First episode of diarrhea", x = "Group")
+```
+```{r}
+ggsave(last_plot(), file="plots/Inicio de la diarrea.tiff", 
+       w=80, h=50, units="mm", dpi=300)
+
+```
+
+
+```{r}
+mod1 <- lm(inicio_diarrea_dias ~ group + sex+cc_vaca, data=diarrea_dat)
+#mod2 <- lm(feedtogain ~ group + sex+weeks+dias_diarrea , data=feedtogain_dat)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+#mod4 <- lm(feedtogain ~ group  , data=feedtogain_dat)
+#mod5 <- lm(feedtogain ~ sex  , data=feedtogain_dat)
+#compare_performance(mod1,mod2,mod4,mod5)
+
+```
+```{r}
+car::Anova(mod1)
+```
+```{r}
+
+em <- emmeans(mod1, ~ group, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+Uso de antibiotiocos
+
+```{r}
+mod1 <- lm(anti_diarrea ~ group + sex+cc_vaca, data=diarrea_dat)
+mod2 <- lm(anti_diarrea ~ group*inicio_diarrea_dias*n_episodios + sex+dias_diarrea , data=diarrea_dat)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+#mod4 <- lm(feedtogain ~ group  , data=feedtogain_dat)
+#mod5 <- lm(feedtogain ~ sex  , data=feedtogain_dat)
+compare_performance(mod1,mod2)
+
+```
+```{r}
+car::Anova(mod2)
+```
+```{r}
+
+em <- emmeans(mod2, ~ group, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+```{r}
+mod1 <- lm(anti_neumonia ~ group + sex+cc_vaca, data=diarrea_dat)
+mod2 <- lm(anti_neumonia ~ group*inicio_diarrea_dias*n_episodios + sex+dias_diarrea , data=diarrea_dat)
+#m3 <- lm(peso ~(1|id_ternero), data=peso_dat)
+#mod4 <- lm(feedtogain ~ group  , data=feedtogain_dat)
+#mod5 <- lm(feedtogain ~ sex  , data=feedtogain_dat)
+compare_performance(mod1,mod2)
+
+
+```
+```{r}
+car::Anova(mod1)
+```
+```{r}
+em <- emmeans(mod2, ~ group, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+
+
+
+
+
 

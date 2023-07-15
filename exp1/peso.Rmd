@@ -13,7 +13,7 @@ knitr::opts_chunk$set(echo = F, warning = F, message = F)
 ```{r, eval =FALSE}
 pacman::p_load(tidyverse, googlesheets4)
 # gs4_deauth()
-# gs4_auth(email = "evangelina.miqueo@gmail.com")
+gs4_auth(email = "evangelina.miqueo@gmail.com")
 gs4_auth(email = "edwardsmolina@gmail.com")
 # gs4_find("Resultados exp 1")
 

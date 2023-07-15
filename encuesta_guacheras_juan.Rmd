@@ -1,0 +1,125 @@
+---
+title: "Trabajo encuesta guacheras"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, janitor,  skimr, rio, here, relaimpo, coefplot,
+               GGally, correlation, performance, emmeans, multcomp, oddsratio) 
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+
+```{r, eval=FALSE}
+raw <- rio::import(here::here("survey/Manejo de Guacheras Encuesta.xlsx"))%>%
+  clean_names() %>% 
+  select(vacination=p1, prepartum=p2, experience=p3, capacitations=p4, rearing_system = p5, realiza_calostrado = p6, calostrum_feeding_num=p8, clostrum_feeding_vol=p9, liquid_feeding_volume=p11, hygiene=p13, disease_ranking=p14, mortality=p15, feed_cows = p23, milk_yield=p24, scc=p25, afb=p29, ffi=p31) 
+raw %>% export("survey/data.csv")
+```
+
+## Importacion de datos
+```{r}
+raw <-import("survey/data.csv")
+raw %>% skim() 
+dat <- raw %>% drop_na
+str(dat)
+```
+
+# Multiple linear regression
+
+### Mortality
+
+```{r}
+mod <- lm(mortality ~ ., data= dat)
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+summary(mod_step)
+```
+
+```{r}
+coefplot(mod_step, parm = -1)
+```
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+```{r}
+dat %>% 
+  select(mortality, vacination, experience, capacitations, liquid_feeding_volume, hygiene) %>% 
+  ggpairs()
+
+dat %>% 
+  ggplot() + 
+  aes(vacination, mortality) + 
+  geom_jitter(width = .1) + 
+  geom_smooth()
+```
+
+# Random forest
+
+```{r}
+pacman::p_load(rpart, rpart.plot)
+```
+
+```{r}
+dat$mortality %>% hist
+dat <- dat %>% 
+  mutate(mortal_cat = cut(mortality, 
+                          breaks=c(-Inf, 5, 10, Inf),
+                          labels=c("low","middle","high")))
+```
+
+```{r}
+dat1 <- tibble::rowid_to_column(dat)
+set.seed(20) # predictable randomness
+# split the data into training and test data (arbitrarily!)
+test_data <- dat1 %>% slice_sample(prop = 0.2)
+train_data <- anti_join(dat1, testdata, by = "rowid")
+
+# set the target variable
+targ <- "mortal_cat"
+# set the predictors
+preds <- c("liquid_feeding_volume", "hygiene", "capacitations", "experience")
+# build a simple rpart decision tree using the default settings
+dtree <- rpart(formula = dat1[,targ] ~ ., data = dat1[,preds])
+```
+
+```{r}
+rpart.plot(dtree)
+```
+
+```{r}
+df <- data.frame(imp = dtree$variable.importance)
+df2 <- df %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+ggplot(df2) +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
+```{r}
+# precisa caret y no instala
+dtree_preds <- predict(dtree, test_data)
+confusionMatrix(
+  data = ifelse(dtree_preds >= 0.5, 1, 0), 
+  reference = test_data$mortal_cat
+  )
+```
+
