@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.3.296">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>mortalidad</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="mortalidad_files/libs/clipboard/clipboard.min.js"></script>
+<script src="mortalidad_files/libs/quarto-html/quarto.js"></script>
+<script src="mortalidad_files/libs/quarto-html/popper.min.js"></script>
+<script src="mortalidad_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="mortalidad_files/libs/quarto-html/anchor.min.js"></script>
+<link href="mortalidad_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="mortalidad_files/libs/quarto-html/quarto-syntax-highlighting.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="mortalidad_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="mortalidad_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="mortalidad_files/libs/bootstrap/bootstrap.min.css" rel="stylesheet" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+<div class="cell">
+<div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>dat <span class="ot">&lt;-</span> rio<span class="sc">::</span><span class="fu">import</span>(here<span class="sc">::</span><span class="fu">here</span>(<span class="st">"survey/survey23.csv"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(tidyverse, janitor,  skimr, </span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>               <span class="co"># GGally, correlation, </span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>               <span class="co"># performance, </span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>               scales, </span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>               <span class="co"># emmeans, multcomp, finalfit,  </span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>               <span class="co"># oddsratio,</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>               coefplot, </span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>               OddsPlotty, </span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>               relaimpo, </span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>               gtools, </span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>               sjPlot)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>pacman<span class="sc">::</span><span class="fu">p_load</span>(rpart, rpart.plot)</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>conflicted<span class="sc">::</span><span class="fu">conflict_prefer</span>(<span class="st">"select"</span>, <span class="st">"dplyr"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>[conflicted] Will prefer dplyr::select over any other package.</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>conflicted<span class="sc">::</span><span class="fu">conflict_prefer</span>(<span class="st">"filter"</span>, <span class="st">"dplyr"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>[conflicted] Will prefer dplyr::filter over any other package.</code></pre>
+</div>
+</div>
+<section id="mortalidad" class="level2">
+<h2 class="anchored" data-anchor-id="mortalidad">Mortalidad</h2>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>dat_mort <span class="ot">&lt;-</span> dat <span class="sc">%&gt;%</span> </span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span><span class="fu">c</span>(feed_cows, milk_yield, scc, afb, ffi)) <span class="sc">%&gt;%</span> </span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">drop_na</span>()</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>dat_mort <span class="sc">%&gt;%</span> <span class="fu">skim</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<table class="table table-sm table-striped small">
+<caption>Data summary</caption>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Name</td>
+<td style="text-align: left;">Piped data</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Number of rows</td>
+<td style="text-align: left;">90</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Number of columns</td>
+<td style="text-align: left;">12</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">_______________________</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Column type frequency:</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">numeric</td>
+<td style="text-align: left;">12</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">________________________</td>
+<td style="text-align: left;"></td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Group variables</td>
+<td style="text-align: left;">None</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Variable type: numeric</strong></p>
+<table class="table table-sm table-striped small">
+<colgroup>
+<col style="width: 26%">
+<col style="width: 12%">
+<col style="width: 17%">
+<col style="width: 6%">
+<col style="width: 6%">
+<col style="width: 3%">
+<col style="width: 4%">
+<col style="width: 4%">
+<col style="width: 4%">
+<col style="width: 6%">
+<col style="width: 7%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">skim_variable</th>
+<th style="text-align: right;">n_missing</th>
+<th style="text-align: right;">complete_rate</th>
+<th style="text-align: right;">mean</th>
+<th style="text-align: right;">sd</th>
+<th style="text-align: right;">p0</th>
+<th style="text-align: right;">p25</th>
+<th style="text-align: right;">p50</th>
+<th style="text-align: right;">p75</th>
+<th style="text-align: right;">p100</th>
+<th style="text-align: left;">hist</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">vacination</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2.53</td>
+<td style="text-align: right;">0.60</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3.0</td>
+<td style="text-align: left;">▁▁▅▁▇</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">prepartum</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2.39</td>
+<td style="text-align: right;">0.63</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3.0</td>
+<td style="text-align: left;">▁▁▇▁▇</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">experience</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3.13</td>
+<td style="text-align: right;">1.04</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">4.0</td>
+<td style="text-align: left;">▁▅▁▂▇</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">capacitations</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.57</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3.0</td>
+<td style="text-align: left;">▇▁▃▁▂</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">rearing_system</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.90</td>
+<td style="text-align: right;">0.46</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2.5</td>
+<td style="text-align: left;">▂▁▁▇▂</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">realiza_calostrado</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.83</td>
+<td style="text-align: right;">0.66</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3.0</td>
+<td style="text-align: left;">▅▁▇▁▂</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">calostrum_feeding_num</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.60</td>
+<td style="text-align: right;">0.65</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3.0</td>
+<td style="text-align: left;">▇▁▇▁▂</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">clostrum_feeding_vol</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3.41</td>
+<td style="text-align: right;">1.16</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">4</td>
+<td style="text-align: right;">5.0</td>
+<td style="text-align: left;">▁▅▆▇▅</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">liquid_feeding_volume</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2.37</td>
+<td style="text-align: right;">0.51</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3.0</td>
+<td style="text-align: left;">▁▁▇▁▅</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">hygiene</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2.27</td>
+<td style="text-align: right;">0.75</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">3.0</td>
+<td style="text-align: left;">▃▁▇▁▇</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">disease_ranking</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1.91</td>
+<td style="text-align: right;">1.38</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">5.0</td>
+<td style="text-align: left;">▇▁▁▂▁</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">mortality</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">6.26</td>
+<td style="text-align: right;">5.04</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">7</td>
+<td style="text-align: right;">25.0</td>
+<td style="text-align: left;">▇▆▃▁▁</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<section id="reg-log---mort5" class="level3">
+<h3 class="anchored" data-anchor-id="reg-log---mort5">Reg log - mort&lt;5</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>mod_bin <span class="ot">&lt;-</span> <span class="fu">glm</span>(mortality <span class="sc">&gt;</span> <span class="dv">5</span> <span class="sc">~</span> ., <span class="at">data=</span>dat_mort)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>mod_step <span class="ot">&lt;-</span> <span class="fu">stepAIC</span>(mod_bin,  <span class="at">direction=</span><span class="st">"both"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Start:  AIC=119.03
+mortality &gt; 5 ~ vacination + prepartum + experience + capacitations + 
+    rearing_system + realiza_calostrado + calostrum_feeding_num + 
+    clostrum_feeding_vol + liquid_feeding_volume + hygiene + 
+    disease_ranking
+
+                        Df Deviance    AIC
+- calostrum_feeding_num  1   14.834 117.15
+- rearing_system         1   14.838 117.17
+- realiza_calostrado     1   14.841 117.19
+- disease_ranking        1   14.900 117.55
+- prepartum              1   15.068 118.56
+- clostrum_feeding_vol   1   15.112 118.82
+&lt;none&gt;                       14.814 119.03
+- hygiene                1   15.422 120.65
+- capacitations          1   15.671 122.09
+- vacination             1   15.716 122.35
+- liquid_feeding_volume  1   15.961 123.74
+- experience             1   16.069 124.35
+
+Step:  AIC=117.15
+mortality &gt; 5 ~ vacination + prepartum + experience + capacitations + 
+    rearing_system + realiza_calostrado + clostrum_feeding_vol + 
+    liquid_feeding_volume + hygiene + disease_ranking
+
+                        Df Deviance    AIC
+- rearing_system         1   14.859 115.30
+- realiza_calostrado     1   14.869 115.36
+- disease_ranking        1   14.906 115.58
+- prepartum              1   15.069 116.56
+&lt;none&gt;                       14.834 117.15
+- clostrum_feeding_vol   1   15.332 118.12
+- hygiene                1   15.423 118.65
++ calostrum_feeding_num  1   14.814 119.03
+- capacitations          1   15.672 120.10
+- vacination             1   15.751 120.55
+- liquid_feeding_volume  1   15.961 121.74
+- experience             1   16.079 122.40
+
+Step:  AIC=115.3
+mortality &gt; 5 ~ vacination + prepartum + experience + capacitations + 
+    realiza_calostrado + clostrum_feeding_vol + liquid_feeding_volume + 
+    hygiene + disease_ranking
+
+                        Df Deviance    AIC
+- realiza_calostrado     1   14.898 113.54
+- disease_ranking        1   14.920 113.67
+- prepartum              1   15.143 115.01
+&lt;none&gt;                       14.859 115.30
+- clostrum_feeding_vol   1   15.338 116.15
+- hygiene                1   15.455 116.84
++ rearing_system         1   14.834 117.15
++ calostrum_feeding_num  1   14.838 117.17
+- capacitations          1   15.727 118.41
+- vacination             1   15.802 118.84
+- liquid_feeding_volume  1   16.017 120.05
+- experience             1   16.080 120.41
+
+Step:  AIC=113.54
+mortality &gt; 5 ~ vacination + prepartum + experience + capacitations + 
+    clostrum_feeding_vol + liquid_feeding_volume + hygiene + 
+    disease_ranking
+
+                        Df Deviance    AIC
+- disease_ranking        1   14.949 111.85
+- prepartum              1   15.173 113.18
+&lt;none&gt;                       14.898 113.54
+- clostrum_feeding_vol   1   15.368 114.33
+- hygiene                1   15.482 115.00
++ realiza_calostrado     1   14.859 115.30
++ rearing_system         1   14.869 115.36
++ calostrum_feeding_num  1   14.869 115.36
+- capacitations          1   15.731 116.43
+- vacination             1   15.990 117.90
+- liquid_feeding_volume  1   16.047 118.22
+- experience             1   16.172 118.92
+
+Step:  AIC=111.85
+mortality &gt; 5 ~ vacination + prepartum + experience + capacitations + 
+    clostrum_feeding_vol + liquid_feeding_volume + hygiene
+
+                        Df Deviance    AIC
+- prepartum              1   15.194 111.31
+&lt;none&gt;                       14.949 111.85
+- clostrum_feeding_vol   1   15.368 112.33
+- hygiene                1   15.566 113.49
++ disease_ranking        1   14.898 113.54
++ realiza_calostrado     1   14.920 113.67
++ rearing_system         1   14.931 113.73
++ calostrum_feeding_num  1   14.939 113.78
+- capacitations          1   15.815 114.91
+- vacination             1   16.009 116.01
+- liquid_feeding_volume  1   16.079 116.41
+- experience             1   16.197 117.06
+
+Step:  AIC=111.31
+mortality &gt; 5 ~ vacination + experience + capacitations + clostrum_feeding_vol + 
+    liquid_feeding_volume + hygiene
+
+                        Df Deviance    AIC
+&lt;none&gt;                       15.194 111.31
+- clostrum_feeding_vol   1   15.553 111.41
++ prepartum              1   14.949 111.85
+- hygiene                1   15.652 111.98
++ rearing_system         1   15.129 112.92
++ realiza_calostrado     1   15.170 113.16
++ disease_ranking        1   15.173 113.18
++ calostrum_feeding_num  1   15.194 113.31
+- capacitations          1   15.972 113.80
+- vacination             1   16.266 115.44
+- experience             1   16.311 115.69
+- liquid_feeding_volume  1   16.352 115.92</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(mod_step)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+glm(formula = mortality &gt; 5 ~ vacination + experience + capacitations + 
+    clostrum_feeding_vol + liquid_feeding_volume + hygiene, data = dat_mort)
+
+Deviance Residuals: 
+     Min        1Q    Median        3Q       Max  
+-1.14876  -0.31930   0.02987   0.28526   1.04727  
+
+Coefficients:
+                      Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)            1.65541    0.33639   4.921  4.3e-06 ***
+vacination             0.19393    0.08012   2.421   0.0177 *  
+experience            -0.11634    0.04710  -2.470   0.0156 *  
+capacitations         -0.13476    0.06537  -2.062   0.0424 *  
+clostrum_feeding_vol  -0.06148    0.04386  -1.402   0.1647    
+liquid_feeding_volume -0.24862    0.09886  -2.515   0.0138 *  
+hygiene               -0.10080    0.06374  -1.581   0.1176    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+(Dispersion parameter for gaussian family taken to be 0.1830585)
+
+    Null deviance: 22.322  on 89  degrees of freedom
+Residual deviance: 15.194  on 83  degrees of freedom
+AIC: 111.31
+
+Number of Fisher Scoring iterations: 2</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">odds_plot</span>(mod_step)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Waiting for profiling to be done...</code></pre>
+</div>
+<div class="cell-output cell-output-stdout">
+<pre><code>$odds_data
+# A tibble: 6 × 4
+     OR lower upper vars                 
+  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;chr&gt;                
+1 1.21  1.04  1.42  vacination           
+2 0.890 0.812 0.976 experience           
+3 0.874 0.769 0.993 capacitations        
+4 0.940 0.863 1.02  clostrum_feeding_vol 
+5 0.780 0.643 0.947 liquid_feeding_volume
+6 0.904 0.798 1.02  hygiene              
+
+$odds_plot</code></pre>
+</div>
+<div class="cell-output-display">
+<p><img src="mortalidad_files/figure-html/unnamed-chunk-2-1.png" class="quarto-discovered-preview-image img-fluid" width="672"></p>
+</div>
+</div>
+<p>Podemos ver en la tabla que se reduce en un 80% (1-0.2) la probabilidad de que la mortalidad sea mayor al 5% cuando el volumen de dieta liquida pasa de 2 a 4 litros y de 4 a 6 litros. (Por cada salto, la probabilidad re reduce un 80%).</p>
+</section>
+<section id="regresion-lineal-multiple" class="level3">
+<h3 class="anchored" data-anchor-id="regresion-lineal-multiple">Regresion lineal multiple</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>mod <span class="ot">&lt;-</span> <span class="fu">lm</span>(mortality <span class="sc">~</span> ., <span class="at">data=</span> dat_mort)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(mod)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+lm(formula = mortality ~ ., data = dat_mort)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-9.8879 -2.7641 -0.6773  2.2867 10.8777 
+
+Coefficients:
+                      Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)           15.30222    3.95861   3.866 0.000228 ***
+vacination             2.04850    0.80724   2.538 0.013153 *  
+prepartum             -0.08371    0.81284  -0.103 0.918235    
+experience            -1.88474    0.46931  -4.016 0.000135 ***
+capacitations         -1.65078    0.66408  -2.486 0.015065 *  
+rearing_system         1.59171    1.03178   1.543 0.126954    
+realiza_calostrado    -0.26763    0.73612  -0.364 0.717161    
+calostrum_feeding_num  0.34643    0.89936   0.385 0.701145    
+clostrum_feeding_vol  -0.20080    0.52763  -0.381 0.704557    
+liquid_feeding_volume -1.79676    0.97904  -1.835 0.070284 .  
+hygiene               -1.53697    0.65636  -2.342 0.021751 *  
+disease_ranking       -0.11054    0.37215  -0.297 0.767225    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Residual standard error: 4.164 on 78 degrees of freedom
+Multiple R-squared:  0.4012,    Adjusted R-squared:  0.3168 
+F-statistic: 4.751 on 11 and 78 DF,  p-value: 1.506e-05</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>mod_step <span class="ot">&lt;-</span> <span class="fu">stepAIC</span>(mod,  <span class="at">direction=</span><span class="st">"both"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Start:  AIC=267.91
+mortality ~ vacination + prepartum + experience + capacitations + 
+    rearing_system + realiza_calostrado + calostrum_feeding_num + 
+    clostrum_feeding_vol + liquid_feeding_volume + hygiene + 
+    disease_ranking
+
+                        Df Sum of Sq    RSS    AIC
+- prepartum              1     0.184 1352.9 265.92
+- disease_ranking        1     1.530 1354.2 266.01
+- realiza_calostrado     1     2.292 1355.0 266.06
+- clostrum_feeding_vol   1     2.512 1355.2 266.07
+- calostrum_feeding_num  1     2.573 1355.3 266.08
+&lt;none&gt;                               1352.7 267.91
+- rearing_system         1    41.273 1394.0 268.61
+- liquid_feeding_volume  1    58.411 1411.1 269.71
+- hygiene                1    95.096 1447.8 272.02
+- capacitations          1   107.162 1459.9 272.77
+- vacination             1   111.681 1464.4 273.05
+- experience             1   279.706 1632.4 282.82
+
+Step:  AIC=265.92
+mortality ~ vacination + experience + capacitations + rearing_system + 
+    realiza_calostrado + calostrum_feeding_num + clostrum_feeding_vol + 
+    liquid_feeding_volume + hygiene + disease_ranking
+
+                        Df Sum of Sq    RSS    AIC
+- disease_ranking        1     1.389 1354.3 264.01
+- realiza_calostrado     1     2.257 1355.2 264.07
+- calostrum_feeding_num  1     2.390 1355.3 264.08
+- clostrum_feeding_vol   1     2.482 1355.4 264.08
+&lt;none&gt;                               1352.9 265.92
+- rearing_system         1    42.170 1395.1 266.68
+- liquid_feeding_volume  1    58.773 1411.7 267.75
++ prepartum              1     0.184 1352.7 267.91
+- hygiene                1   106.067 1459.0 270.71
+- capacitations          1   111.484 1464.4 271.04
+- vacination             1   111.637 1464.5 271.05
+- experience             1   285.839 1638.7 281.17
+
+Step:  AIC=264.01
+mortality ~ vacination + experience + capacitations + rearing_system + 
+    realiza_calostrado + calostrum_feeding_num + clostrum_feeding_vol + 
+    liquid_feeding_volume + hygiene
+
+                        Df Sum of Sq    RSS    AIC
+- calostrum_feeding_num  1     1.761 1356.0 262.13
+- realiza_calostrado     1     2.045 1356.3 262.15
+- clostrum_feeding_vol   1     3.317 1357.6 262.23
+&lt;none&gt;                               1354.3 264.01
+- rearing_system         1    46.294 1400.6 265.04
++ disease_ranking        1     1.389 1352.9 265.92
+- liquid_feeding_volume  1    60.233 1414.5 265.93
++ prepartum              1     0.043 1354.2 266.01
+- hygiene                1   104.718 1459.0 268.71
+- capacitations          1   110.664 1465.0 269.08
+- vacination             1   112.581 1466.9 269.20
+- experience             1   288.487 1642.8 279.39
+
+Step:  AIC=262.13
+mortality ~ vacination + experience + capacitations + rearing_system + 
+    realiza_calostrado + clostrum_feeding_vol + liquid_feeding_volume + 
+    hygiene
+
+                        Df Sum of Sq    RSS    AIC
+- clostrum_feeding_vol   1     1.691 1357.7 260.24
+- realiza_calostrado     1     2.766 1358.8 260.31
+&lt;none&gt;                               1356.0 262.13
+- rearing_system         1    46.400 1402.5 263.15
++ calostrum_feeding_num  1     1.761 1354.3 264.01
++ disease_ranking        1     0.759 1355.3 264.08
++ prepartum              1     0.007 1356.0 264.13
+- liquid_feeding_volume  1    64.618 1420.7 264.32
+- hygiene                1   109.534 1465.6 267.12
+- vacination             1   111.369 1467.4 267.23
+- capacitations          1   119.383 1475.4 267.72
+- experience             1   288.421 1644.5 277.48
+
+Step:  AIC=260.24
+mortality ~ vacination + experience + capacitations + rearing_system + 
+    realiza_calostrado + liquid_feeding_volume + hygiene
+
+                        Df Sum of Sq    RSS    AIC
+- realiza_calostrado     1     2.695 1360.4 258.42
+&lt;none&gt;                               1357.7 260.24
+- rearing_system         1    45.093 1402.8 261.18
++ clostrum_feeding_vol   1     1.691 1356.0 262.13
++ disease_ranking        1     1.595 1356.2 262.13
++ calostrum_feeding_num  1     0.135 1357.6 262.23
++ prepartum              1     0.000 1357.7 262.24
+- liquid_feeding_volume  1    81.358 1439.1 263.48
+- vacination             1   109.792 1467.5 265.24
+- hygiene                1   112.476 1470.2 265.40
+- capacitations          1   126.226 1484.0 266.24
+- experience             1   304.720 1662.5 276.46
+
+Step:  AIC=258.42
+mortality ~ vacination + experience + capacitations + rearing_system + 
+    liquid_feeding_volume + hygiene
+
+                        Df Sum of Sq    RSS    AIC
+&lt;none&gt;                               1360.4 258.42
+- rearing_system         1    43.565 1404.0 259.25
++ realiza_calostrado     1     2.695 1357.7 260.24
++ clostrum_feeding_vol   1     1.621 1358.8 260.31
++ disease_ranking        1     1.206 1359.2 260.34
++ calostrum_feeding_num  1     0.355 1360.1 260.39
++ prepartum              1     0.005 1360.4 260.42
+- liquid_feeding_volume  1    82.063 1442.5 261.69
+- vacination             1   107.708 1468.2 263.27
+- hygiene                1   114.212 1474.7 263.67
+- capacitations          1   135.337 1495.8 264.95
+- experience             1   302.235 1662.7 274.47</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(mod_step)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+lm(formula = mortality ~ vacination + experience + capacitations + 
+    rearing_system + liquid_feeding_volume + hygiene, data = dat_mort)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-9.6512 -2.6977 -0.7741  2.7653 11.0904 
+
+Coefficients:
+                      Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)            15.3567     3.4916   4.398 3.22e-05 ***
+vacination              1.9459     0.7591   2.563  0.01217 *  
+experience             -1.8999     0.4424  -4.294 4.73e-05 ***
+capacitations          -1.7597     0.6124  -2.873  0.00515 ** 
+rearing_system          1.5556     0.9542   1.630  0.10683    
+liquid_feeding_volume  -1.9749     0.8826  -2.238  0.02793 *  
+hygiene                -1.5894     0.6021  -2.640  0.00991 ** 
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Residual standard error: 4.049 on 83 degrees of freedom
+Multiple R-squared:  0.3978,    Adjusted R-squared:  0.3543 
+F-statistic: 9.138 on 6 and 83 DF,  p-value: 1.136e-07</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">coefplot</span>(mod_step, <span class="at">intercept =</span> <span class="cn">FALSE</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="mortalidad_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>En este grafico podemos ver todas las variables que tienen efecto sobre mortalidad la disminuyen, menos vacunacion la cual muestra que al aumentar la vacunacion aumenta la mortalidad. Preguntar a Lu como armo la tabla..</p>
+<p>Analizo la importancia relativa de las variables presentes en el modelo</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>ri <span class="ot">&lt;-</span> <span class="fu">calc.relimp</span>(mod_step, <span class="at">type=</span><span class="st">"car"</span>, <span class="at">rela=</span><span class="cn">TRUE</span>, <span class="at">rank =</span> <span class="cn">TRUE</span>) </span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>ri</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Response variable: mortality 
+Total response variance: 25.3834 
+Analysis based on 90 observations 
+
+6 Regressors: 
+vacination experience capacitations rearing_system liquid_feeding_volume hygiene 
+Proportion of variance explained by model: 39.78%
+Metrics are normalized to sum to 100% (rela=TRUE). 
+
+Relative importance metrics: 
+
+                            car
+vacination            0.1213761
+experience            0.4196616
+capacitations         0.1481106
+rearing_system        0.0372352
+liquid_feeding_volume 0.1446459
+hygiene               0.1289706</code></pre>
+</div>
+</div>
+<p>El volumen de dieta liquida explica el 30% de la mortalidad, seguido de capacitaciones con 21% e higiene con 18%</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="co"># dat %&gt;% </span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="co">#   select(mortality, vacination, experience, capacitations, liquid_feeding_volume, hygiene) %&gt;% </span></span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="co">#   ggpairs()</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>dat <span class="sc">%&gt;%</span> </span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span> </span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">aes</span>(vacination, mortality) <span class="sc">+</span> </span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_jitter</span>(<span class="at">width =</span> .<span class="dv">1</span>) <span class="sc">+</span> </span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_smooth</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>`geom_smooth()` using method = 'loess' and formula = 'y ~ x'</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: Removed 1 rows containing non-finite values (`stat_smooth()`).</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in simpleLoess(y, x, w, span, degree = degree, parametric = parametric,
+: pseudoinverse used at 0.99</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in simpleLoess(y, x, w, span, degree = degree, parametric = parametric,
+: neighborhood radius 2.01</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in simpleLoess(y, x, w, span, degree = degree, parametric = parametric,
+: reciprocal condition number 4.018e-17</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in simpleLoess(y, x, w, span, degree = degree, parametric = parametric,
+: There are other near singularities as well. 1.0201</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in predLoess(object$y, object$x, newx = if (is.null(newdata)) object$x
+else if (is.data.frame(newdata))
+as.matrix(model.frame(delete.response(terms(object)), : pseudoinverse used at
+0.99</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in predLoess(object$y, object$x, newx = if (is.null(newdata)) object$x
+else if (is.data.frame(newdata))
+as.matrix(model.frame(delete.response(terms(object)), : neighborhood radius
+2.01</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in predLoess(object$y, object$x, newx = if (is.null(newdata)) object$x
+else if (is.data.frame(newdata))
+as.matrix(model.frame(delete.response(terms(object)), : reciprocal condition
+number 4.018e-17</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in predLoess(object$y, object$x, newx = if (is.null(newdata)) object$x
+else if (is.data.frame(newdata))
+as.matrix(model.frame(delete.response(terms(object)), : There are other near
+singularities as well. 1.0201</code></pre>
+</div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: Removed 1 rows containing missing values (`geom_point()`).</code></pre>
+</div>
+<div class="cell-output-display">
+<p><img src="mortalidad_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Este ultimo grafico exploratorio muestra que en realidad hay pocos datos para el nivel de vacunacion 1 y a lo mejor ahi esta la explicacion del porque da raro el resultado (&gt;vacunacion&gt;mortalidad)</p>
+</section>
+<section id="arbol-de-clasificacion" class="level3">
+<h3 class="anchored" data-anchor-id="arbol-de-clasificacion">Arbol de clasificacion</h3>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># https://www.displayr.com/how-is-variable-importance-calculated-for-a-random-forest/#:~:text=This%20importance%20is%20a%20measure,accuracy%20due%20to%20random%20noise.</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb36"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>dat_mort<span class="sc">$</span>mortality <span class="sc">%&gt;%</span> hist</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="mortalidad_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a>dtree_quant <span class="ot">&lt;-</span> <span class="fu">rpart</span>(</span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>  mortality <span class="sc">~</span> liquid_feeding_volume<span class="sc">+</span>hygiene<span class="sc">+</span>capacitations<span class="sc">+</span>experience, </span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> dat_mort)</span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>dtree_quant</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>n= 90 
+
+node), split, n, deviance, yval
+      * denotes terminal node
+
+ 1) root 90 2259.12200  6.255556  
+   2) experience&gt;=2.5 59  880.16950  4.881356  
+     4) hygiene&gt;=1.5 48  506.31250  4.312500  
+       8) capacitations&gt;=1.5 20  105.00000  3.500000  
+        16) hygiene&gt;=2.5 11   22.72727  2.454545 *
+        17) hygiene&lt; 2.5 9   55.55556  4.777778 *
+       9) capacitations&lt; 1.5 28  378.67860  4.892857  
+        18) liquid_feeding_volume&gt;=2.5 15  191.73330  3.866667 *
+        19) liquid_feeding_volume&lt; 2.5 13  152.92310  6.076923 *
+     5) hygiene&lt; 1.5 11  290.54550  7.363636 *
+   3) experience&lt; 2.5 31 1055.48400  8.870968  
+     6) capacitations&gt;=1.5 14  316.92860  6.928571 *
+     7) capacitations&lt; 1.5 17  642.23530 10.470590 *</code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(dtree_quant)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Call:
+rpart(formula = mortality ~ liquid_feeding_volume + hygiene + 
+    capacitations + experience, data = dat_mort)
+  n= 90 
+
+          CP nsplit rel error    xerror      xstd
+1 0.14318343      0 1.0000000 1.0105227 0.1848590
+2 0.04263603      1 0.8568166 0.9769785 0.2214574
+3 0.03687784      2 0.8141805 1.1153330 0.2286442
+4 0.01253940      3 0.7773027 1.0312424 0.2229415
+5 0.01182635      5 0.7522239 1.0458607 0.2228505
+6 0.01000000      6 0.7403976 1.0378124 0.2232723
+
+Variable importance
+           experience         capacitations               hygiene 
+                   53                    21                    21 
+liquid_feeding_volume 
+                    6 
+
+Node number 1: 90 observations,    complexity param=0.1431834
+  mean=6.255556, MSE=25.10136 
+  left son=2 (59 obs) right son=3 (31 obs)
+  Primary splits:
+      experience            &lt; 2.5 to the right, improve=0.14318340, (0 missing)
+      liquid_feeding_volume &lt; 2.5 to the right, improve=0.09872084, (0 missing)
+      hygiene               &lt; 1.5 to the right, improve=0.06786700, (0 missing)
+      capacitations         &lt; 1.5 to the right, improve=0.04769934, (0 missing)
+
+Node number 2: 59 observations,    complexity param=0.03687784
+  mean=4.881356, MSE=14.91813 
+  left son=4 (48 obs) right son=5 (11 obs)
+  Primary splits:
+      hygiene               &lt; 1.5 to the right, improve=0.09465397, (0 missing)
+      liquid_feeding_volume &lt; 2.5 to the right, improve=0.07195382, (0 missing)
+      capacitations         &lt; 1.5 to the right, improve=0.05587464, (0 missing)
+      experience            &lt; 3.5 to the right, improve=0.01711881, (0 missing)
+
+Node number 3: 31 observations,    complexity param=0.04263603
+  mean=8.870968, MSE=34.04787 
+  left son=6 (14 obs) right son=7 (17 obs)
+  Primary splits:
+      capacitations &lt; 1.5 to the right, improve=0.09125673, (0 missing)
+      hygiene       &lt; 2.5 to the right, improve=0.07036602, (0 missing)
+  Surrogate splits:
+      hygiene &lt; 2.5 to the right, agree=0.613, adj=0.143, (0 split)
+
+Node number 4: 48 observations,    complexity param=0.0125394
+  mean=4.3125, MSE=10.54818 
+  left son=8 (20 obs) right son=9 (28 obs)
+  Primary splits:
+      capacitations         &lt; 1.5 to the right, improve=0.044703480, (0 missing)
+      experience            &lt; 3.5 to the right, improve=0.039180350, (0 missing)
+      hygiene               &lt; 2.5 to the right, improve=0.010278450, (0 missing)
+      liquid_feeding_volume &lt; 2.5 to the right, improve=0.009258116, (0 missing)
+
+Node number 5: 11 observations
+  mean=7.363636, MSE=26.41322 
+
+Node number 6: 14 observations
+  mean=6.928571, MSE=22.63776 
+
+Node number 7: 17 observations
+  mean=10.47059, MSE=37.77855 
+
+Node number 8: 20 observations,    complexity param=0.01182635
+  mean=3.5, MSE=5.25 
+  left son=16 (11 obs) right son=17 (9 obs)
+  Primary splits:
+      hygiene               &lt; 2.5 to the right, improve=0.25444930, (0 missing)
+      liquid_feeding_volume &lt; 2.5 to the left,  improve=0.08128908, (0 missing)
+      capacitations         &lt; 2.5 to the right, improve=0.06331763, (0 missing)
+  Surrogate splits:
+      capacitations &lt; 2.5 to the right, agree=0.7, adj=0.333, (0 split)
+      experience    &lt; 3.5 to the right, agree=0.6, adj=0.111, (0 split)
+
+Node number 9: 28 observations,    complexity param=0.0125394
+  mean=4.892857, MSE=13.52423 
+  left son=18 (15 obs) right son=19 (13 obs)
+  Primary splits:
+      liquid_feeding_volume &lt; 2.5 to the right, improve=0.08984443, (0 missing)
+      hygiene               &lt; 2.5 to the left,  improve=0.01509461, (0 missing)
+  Surrogate splits:
+      hygiene &lt; 2.5 to the right, agree=0.571, adj=0.077, (0 split)
+
+Node number 16: 11 observations
+  mean=2.454545, MSE=2.066116 
+
+Node number 17: 9 observations
+  mean=4.777778, MSE=6.17284 
+
+Node number 18: 15 observations
+  mean=3.866667, MSE=12.78222 
+
+Node number 19: 13 observations
+  mean=6.076923, MSE=11.76331 </code></pre>
+</div>
+<div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a><span class="fu">rpart.plot</span>(dtree_quant)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="mortalidad_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Clasifica los casos. Ayuda a explicar como se relacionan las variables con la mortalidad. Asi, de las encuestas con baja mortalidad un 42% daba alto vol de dieta liquida (&gt;=3 - preguntar a Lu como hizo la clasificacion para interpretar mejor), de ese 42% un 92% tubo baja mortalidad. De los que dieron menor volumen de dieta iquida, cuando realizaron practicas de higiene y capacitacion tuvieron baja mortalidad (25%) y media mortalidad el 19%. Mientras que el 14% restante que alimento con poco volumen y no hizo nada mas (higiene ni capacitacion) tuvo alta mortalidad.</p>
+<ul>
+<li>Importancia de las variables predictoras sobre mortalidad</li>
+</ul>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb42"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">data.frame</span>(<span class="at">imp =</span> dtree_quant<span class="sc">$</span>variable.importance) <span class="sc">%&gt;%</span> </span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rownames_to_column</span>() <span class="sc">%&gt;%</span> </span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">rename</span>(<span class="st">"variable"</span> <span class="ot">=</span> rowname) <span class="sc">%&gt;%</span> </span>
+<span id="cb42-4"><a href="#cb42-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(imp) <span class="sc">%&gt;%</span></span>
+<span id="cb42-5"><a href="#cb42-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">variable =</span> <span class="fu">fct_inorder</span>(variable))</span>
+<span id="cb42-6"><a href="#cb42-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Basic piechart</span></span>
+<span id="cb42-7"><a href="#cb42-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb42-8"><a href="#cb42-8" aria-hidden="true" tabindex="-1"></a>df <span class="sc">%&gt;%</span> </span>
+<span id="cb42-9"><a href="#cb42-9" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>() <span class="sc">+</span></span>
+<span id="cb42-10"><a href="#cb42-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_col</span>(<span class="fu">aes</span>(<span class="at">x =</span> variable, <span class="at">y =</span> imp),</span>
+<span id="cb42-11"><a href="#cb42-11" aria-hidden="true" tabindex="-1"></a>           <span class="at">col =</span> <span class="st">"black"</span>, <span class="at">show.legend =</span> F) <span class="sc">+</span></span>
+<span id="cb42-12"><a href="#cb42-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">coord_flip</span>() <span class="sc">+</span></span>
+<span id="cb42-13"><a href="#cb42-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_grey</span>() <span class="sc">+</span></span>
+<span id="cb42-14"><a href="#cb42-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_bw</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="mortalidad_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (event) {
+  const toggleBodyColorMode = (bsSheetEl) => {
+    const mode = bsSheetEl.getAttribute("data-mode");
+    const bodyEl = window.document.querySelector("body");
+    if (mode === "dark") {
+      bodyEl.classList.add("quarto-dark");
+      bodyEl.classList.remove("quarto-light");
+    } else {
+      bodyEl.classList.add("quarto-light");
+      bodyEl.classList.remove("quarto-dark");
+    }
+  }
+  const toggleBodyColorPrimary = () => {
+    const bsSheetEl = window.document.querySelector("link#quarto-bootstrap");
+    if (bsSheetEl) {
+      toggleBodyColorMode(bsSheetEl);
+    }
+  }
+  toggleBodyColorPrimary();  
+  const icon = "";
+  const anchorJS = new window.AnchorJS();
+  anchorJS.options = {
+    placement: 'right',
+    icon: icon
+  };
+  anchorJS.add('.anchored');
+  const isCodeAnnotation = (el) => {
+    for (const clz of el.classList) {
+      if (clz.startsWith('code-annotation-')) {                     
+        return true;
+      }
+    }
+    return false;
+  }
+  const clipboard = new window.ClipboardJS('.code-copy-button', {
+    text: function(trigger) {
+      const codeEl = trigger.previousElementSibling.cloneNode(true);
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+  });
+  clipboard.on('success', function(e) {
+    // button target
+    const button = e.trigger;
+    // don't keep focus
+    button.blur();
+    // flash "checked"
+    button.classList.add('code-copy-button-checked');
+    var currentTitle = button.getAttribute("title");
+    button.setAttribute("title", "Copied!");
+    let tooltip;
+    if (window.bootstrap) {
+      button.setAttribute("data-bs-toggle", "tooltip");
+      button.setAttribute("data-bs-placement", "left");
+      button.setAttribute("data-bs-title", "Copied!");
+      tooltip = new bootstrap.Tooltip(button, 
+        { trigger: "manual", 
+          customClass: "code-copy-button-tooltip",
+          offset: [0, -8]});
+      tooltip.show();    
+    }
+    setTimeout(function() {
+      if (tooltip) {
+        tooltip.hide();
+        button.removeAttribute("data-bs-title");
+        button.removeAttribute("data-bs-toggle");
+        button.removeAttribute("data-bs-placement");
+      }
+      button.setAttribute("title", currentTitle);
+      button.classList.remove('code-copy-button-checked');
+    }, 1000);
+    // clear code selection
+    e.clearSelection();
+  });
+  function tippyHover(el, contentFn) {
+    const config = {
+      allowHTML: true,
+      content: contentFn,
+      maxWidth: 500,
+      delay: 100,
+      arrow: false,
+      appendTo: function(el) {
+          return el.parentElement;
+      },
+      interactive: true,
+      interactiveBorder: 10,
+      theme: 'quarto',
+      placement: 'bottom-start'
+    };
+    window.tippy(el, config); 
+  }
+  const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+  for (var i=0; i<noterefs.length; i++) {
+    const ref = noterefs[i];
+    tippyHover(ref, function() {
+      // use id or data attribute instead here
+      let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+      try { href = new URL(href).hash; } catch {}
+      const id = href.replace(/^#\/?/, "");
+      const note = window.document.getElementById(id);
+      return note.innerHTML;
+    });
+  }
+      let selectedAnnoteEl;
+      const selectorForAnnotation = ( cell, annotation) => {
+        let cellAttr = 'data-code-cell="' + cell + '"';
+        let lineAttr = 'data-code-annotation="' +  annotation + '"';
+        const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+        return selector;
+      }
+      const selectCodeLines = (annoteEl) => {
+        const doc = window.document;
+        const targetCell = annoteEl.getAttribute("data-target-cell");
+        const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+        const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+        const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+        const lineIds = lines.map((line) => {
+          return targetCell + "-" + line;
+        })
+        let top = null;
+        let height = null;
+        let parent = null;
+        if (lineIds.length > 0) {
+            //compute the position of the single el (top and bottom and make a div)
+            const el = window.document.getElementById(lineIds[0]);
+            top = el.offsetTop;
+            height = el.offsetHeight;
+            parent = el.parentElement.parentElement;
+          if (lineIds.length > 1) {
+            const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+            const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+            height = bottom - top;
+          }
+          if (top !== null && height !== null && parent !== null) {
+            // cook up a div (if necessary) and position it 
+            let div = window.document.getElementById("code-annotation-line-highlight");
+            if (div === null) {
+              div = window.document.createElement("div");
+              div.setAttribute("id", "code-annotation-line-highlight");
+              div.style.position = 'absolute';
+              parent.appendChild(div);
+            }
+            div.style.top = top - 2 + "px";
+            div.style.height = height + 4 + "px";
+            let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+            if (gutterDiv === null) {
+              gutterDiv = window.document.createElement("div");
+              gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+              gutterDiv.style.position = 'absolute';
+              const codeCell = window.document.getElementById(targetCell);
+              const gutter = codeCell.querySelector('.code-annotation-gutter');
+              gutter.appendChild(gutterDiv);
+            }
+            gutterDiv.style.top = top - 2 + "px";
+            gutterDiv.style.height = height + 4 + "px";
+          }
+          selectedAnnoteEl = annoteEl;
+        }
+      };
+      const unselectCodeLines = () => {
+        const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+        elementsIds.forEach((elId) => {
+          const div = window.document.getElementById(elId);
+          if (div) {
+            div.remove();
+          }
+        });
+        selectedAnnoteEl = undefined;
+      };
+      // Attach click handler to the DT
+      const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+      for (const annoteDlNode of annoteDls) {
+        annoteDlNode.addEventListener('click', (event) => {
+          const clickedEl = event.target;
+          if (clickedEl !== selectedAnnoteEl) {
+            unselectCodeLines();
+            const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+            if (activeEl) {
+              activeEl.classList.remove('code-annotation-active');
+            }
+            selectCodeLines(clickedEl);
+            clickedEl.classList.add('code-annotation-active');
+          } else {
+            // Unselect the line
+            unselectCodeLines();
+            clickedEl.classList.remove('code-annotation-active');
+          }
+        });
+      }
+  const findCites = (el) => {
+    const parentEl = el.parentElement;
+    if (parentEl) {
+      const cites = parentEl.dataset.cites;
+      if (cites) {
+        return {
+          el,
+          cites: cites.split(' ')
+        };
+      } else {
+        return findCites(el.parentElement)
+      }
+    } else {
+      return undefined;
+    }
+  };
+  var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+  for (var i=0; i<bibliorefs.length; i++) {
+    const ref = bibliorefs[i];
+    const citeInfo = findCites(ref);
+    if (citeInfo) {
+      tippyHover(citeInfo.el, function() {
+        var popup = window.document.createElement('div');
+        citeInfo.cites.forEach(function(cite) {
+          var citeDiv = window.document.createElement('div');
+          citeDiv.classList.add('hanging-indent');
+          citeDiv.classList.add('csl-entry');
+          var biblioDiv = window.document.getElementById('ref-' + cite);
+          if (biblioDiv) {
+            citeDiv.innerHTML = biblioDiv.innerHTML;
+          }
+          popup.appendChild(citeDiv);
+        });
+        return popup.innerHTML;
+      });
+    }
+  }
+});
+</script>
+</div> <!-- /content -->
+
+
+
+</body></html>

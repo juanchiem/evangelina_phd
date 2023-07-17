@@ -1,14 +1,25 @@
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
 ```{r data}
 dat <- rio::import(here::here("survey/survey23.csv"))
 ```
 
 ```{r paquetes}
-pacman::p_load(tidyverse, janitor,  skimr, rio, here,
-               GGally, correlation, performance, scales, 
+pacman::p_load(tidyverse, janitor,  skimr, 
+               # GGally, correlation, 
+               # performance, 
+               scales, 
                # emmeans, multcomp, finalfit,  
-               oddsratio, coefplot, OddsPlotty, relaimpo, gtools, SjPlot)
+               # oddsratio,
+               coefplot, 
+               OddsPlotty, 
+               relaimpo, 
+               gtools, 
+               sjPlot)
 pacman::p_load(rpart, rpart.plot)
-pacman::p_load(sjPlot)
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
 ```
@@ -75,7 +86,7 @@ rowid_to_column(dat_scc)
 dtree_scc <- rpart(
 scc ~ hygiene+capacitations+calostrum_feeding_num + realiza_calostrado, 
                data = dat_scc)
-dtree
+dtree_scc
 ```
 
 ```{r}
@@ -153,13 +164,9 @@ ri
 ```
 
 Las capacitaciones explican el 53% de la edad a la primera inseminacion y el sistema de crianza el 22%.
-```{r}
-dat %>% 
-  select(afb, capacitations, rearing_system) %>% 
-  ggpairs()
-```
 
 ## Arbol de clasificacion
+
 ```{r}
 dat$afb %>% hist
 dat1 <- dat %>% 
@@ -240,9 +247,9 @@ No hay odds de nada
 ```{r}
 mod5 <- lm(ffi ~ prepartum + realiza_calostrado + hygiene , data= dat)
 ```
+
 ```{r}
 car::Anova(mod5)
-
 ```
 
 ```{r}
