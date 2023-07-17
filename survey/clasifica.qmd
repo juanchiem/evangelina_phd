@@ -1,0 +1,78 @@
+---
+title: "Untitled"
+format: html
+editor_options: 
+  chunk_output_type: console
+---
+
+# Data
+
+```{r}
+library(tidyverse)
+library(caret)
+raw <- rio::import("../survey/data.csv")
+raw %>% skimr::skim() 
+dat <- raw %>% drop_na
+str(dat)
+```
+
+# Random forest
+
+
+```{r}
+set.seed(20) # predictable randomness
+
+dat1 <- dat %>%
+  mutate(mortal_cat = cut(mortality, 
+                          breaks=c(-Inf, 5, Inf),
+                         labels=c("low","high")))%>%
+    select(mortal_cat, vacination, experience, capacitations, liquid_feeding_volume, hygiene) 
+
+# split the data into training and test data (arbitrarily!)
+trainIndex <- createDataPartition(dat1$mortal_cat, p = .7,
+ list = FALSE,
+ times = 1)
+train <- dat1[ trainIndex,]
+test  <- dat1[-trainIndex,]
+```
+
+
+```{r}
+fitControl <- trainControl(
+ method = "repeatedcv",
+ number = 10,
+ repeats = 5)
+
+dt.fit <- train(mortal_cat ~ ., data = train,
+ method = "rpart",
+ trControl = fitControl
+ # preProcess=c("center", "scale")
+ )
+
+dt.fit
+plot(dt.fit$finalModel)
+text(dt.fit$finalModel)
+predictions <- predict(dt.fit, test)
+confusionMatrix(predictions, test$mortal_cat)
+```
+
+```{r}
+plot(varImp(dt.fit))
+```
+
+```{r}
+rf.fit <- train(mortal_cat ~ ., data = train,
+ method = "rf",
+ trControl = fitControl,
+ preProcess=c("center", "scale")
+ )
+
+rf.fit
+```
+
+```{r}
+predictions <- predict(rf.fit, test)
+confusionMatrix(predictions, test$mortal_cat)
+
+plot(varImp(rf.fit))
+```

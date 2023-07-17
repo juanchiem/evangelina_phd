@@ -10,13 +10,15 @@ knitr::opts_chunk$set(echo = TRUE,
 ```
 
 ```{r paquetes}
-pacman::p_load(tidyverse, lubridate, janitor)
+pacman::p_load(tidyverse, lubridate, janitor, ggstance)
 pacman::p_load(GGally, correlation, ggcorrplot, viridis) 
-pacman::p_load(cowplot)
-pacman::p_load(lme4, performance, skimr, emmeans, multcomp, sjPlot) 
+pacman::p_load(cowplot, desctools)
+pacman::p_load(lme4, performance, skimr, emmeans, multcomp, sjPlot, oddsratio) 
 #install.packages("multcompView") # solo una vez y no hace falta cargarlo
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
+conflicted::conflict_prefer("chisq.test", "janitor")
+conflicted::conflict_prefer("fisher.test", "janitor") 
 ```
 
 Contexto: se da minerales y vitaminas asociados a propiedades antioxidantes a vacas en el periodo preparto y se evaluan diferentes variables en el ternero tales como peso vivo durante 9 semanas y luego a los 200 dias de vida aproximadamente ademas de evaluar como la ocurrencia de Neosporosis en la madre al preparto afecto el peso al nacer
@@ -29,7 +31,189 @@ raw <- rio::import("../exp1/data/neospora_peso.xlsx")%>%
 raw %>% str 
 raw %>% head 
 ```
+###Voy a evaluar si hay alguna relacion entre abortos de vacas y seropositividad
+```{r}
+raw1<-raw %>% 
+  mutate_at(vars(abortos), as.factor)
+raw1
+```
 
+```{r}
+raw1 %>% 
+  # filter(dias<250) %>% 
+  # filter(ac<100) %>% 
+  ggplot()+
+  aes(x=abortos, y=ac_vaca, col=trat)+
+  geom_jitter(width=.2, alpha=.5)+
+   geom_line(stat = "summary", fun=mean)+
+  # geom_line(stat = "summary", fun=median)+
+  # geom_smooth(se=F, method = "lm")+
+  theme_bw()+
+  geom_hline(yintercept = 6, linetype="dashed") + 
+  labs(y="Serologia", x = "Abortos")
+```
+
+```{r}
+m1 <- lm (ac_vaca ~ abortos, data=raw1)
+m2 <- lm (ac_vaca ~ trat, data = raw1)
+m3 <- lm (ac_vaca ~ abortos*trat, data=raw1)
+m4 <- lm (ac_vaca ~ abortos+trat, data=raw1)
+compare_performance(m1, m2, m3, m4)
+```
+
+```{r}
+car::Anova(m1)
+```
+```{r}
+em <- emmeans(m1, ~ abortos, type="response")
+em  %>% knitr::kable()
+class(em)
+
+```
+
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         ac_vaca = emmean)
+res
+```
+```{r}
+res %>%  
+  ggplot() +
+  aes(x=abortos, y=ac_vaca)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  labs(x = "Number of abortions", y = "IgG prepartum cows, RICP")+  
+  geom_text(aes(label = letras), angle=90, vjust=-1)+
+  geom_jitter(data = raw1, width = .1, alpha=.5) +
+  theme_bw()
+
+```
+
+```{r}
+ggsave(last_plot(), file = "plots/abortos_acvaca.png", w=8, h=8)
+
+```
+```{r}
+res %>%  
+  ggplot() +
+  aes(x=abortos, y=ac_vaca)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  labs(x = "Number of abortions", y = "IgG prepartum cows, RICP")+   stat_summary(fun= mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "point", 
+               size = 2)+
+    geom_text(aes(label = letras), angle=90, vjust=-1)+
+ # geom_jitter(data = raw1, width = .1, alpha=.5) +
+  theme_bw()
+
+```
+```{r}
+res %>%  
+  ggplot() +
+  aes(x=abortos, y=ac_vaca)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  labs(x = "Number of abortions", y = "IgG prepartum cows, RICP")+  
+  geom_text(aes(label = letras), angle=90, vjust=-1)+
+  geom_jitter(data = raw1, width = .1, alpha=.5) +
+    stat_summary(fun = mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "crossbar", 
+               size = 0.5)+
+  
+  theme_bw()
+  
+
+```
+```{r}
+res %>%  
+  ggplot() +
+  aes(x=abortos, y=ac_vaca)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  labs(x = "Number of abortions", y = "IgG prepartum cows, RICP")+  
+  geom_text(aes(label = letras), angle=0, vjust=-2, hjust= -1)+
+  geom_jitter(data = raw1, width = .1, alpha=.5) +
+    stat_summary(fun = mean,  #median
+               fun.min= mean,
+               fun.max = mean,
+               geom = "crossbar", 
+               size = 0.5)+
+     geom_hline(yintercept = 6, linetype="dashed") + 
+  
+    theme_bw()
+
+```
+```{r}
+ggsave(last_plot(), file = "plots/abortos_IgGvaca.png", w=8, h=8)
+```
+### Paso las variables abortos y ac_vacas a binomial para poder hacer luego el chi cuadrado
+```{r}
+abort_dat <- raw %>% 
+  select(ac_vaca, abortos) %>% 
+  mutate(binom_ac  = ifelse(ac_vaca >= 6,"+","-")) %>% 
+  mutate(binom_abort = ifelse(abortos>=1, 1,0)) 
+
+abort_dat %>% str
+
+```
+```{r}
+abort<-abort_dat %>% 
+  select(binom_ac, binom_abort)
+abort
+```
+```{r}
+tabla <- xtabs (~ binom_ac + binom_abort, data = abort)
+tabla
+```
+```{r}
+ftable(tabla)
+```
+```{r}
+chisq.test(tabla)
+```
+```{r}
+fisher.test(tabla)
+```
+
+```{r}
+summary(tabla)
+```
+Se realizo la prueba de chi cuadrado para examinar la asociacion entre serologia y abortos y se encontro una asociacion significativa entre las variables x2 (gl1), x = 6.862, p<0.01. Al calcular el odd ratio se encontro que las vacas seropositivas tienen 4.85 veces mas provabilidades de abortar en comparacion con las vacas seronegativas
+
+## Voy a ver si el nivel de Acs de las madres se vio afectado por el tratamiento
+
+```{r}
+m1 <- lm (ac_vaca ~ trat, data=raw1)
+```
+```{r}
+anova(m1)
+```
+## Voy a ver si el tratamiento afecto el nivel de Acs de los terneros al nacer
+```{r}
+m1 <- lm(ac_0~trat, data=raw1)
+m2 <- lm(ac_0~sexo, data=raw1)
+m3 <- lm(ac_0~trat*sexo, data=raw1)
+m4 <- lm(ac_0~trat+sexo, data=raw1)
+compare_performance(m1,m2,m3,m4)
+```
+```{r}
+anova(m2)
+```
+Tanto el nivel de anticuerpos de la madre como del ternero al nacer no se vieron afectados por el tratamiento con antioxidantes pero hubo una tendencia a que el sexo del ternero afectara el nievl de acs al nacer
+
+####Acomodo la tabla (la pivoteo)
 ```{r}
 ac_dat <- raw %>% 
   pivot_longer(cols = ac_0:ac_250, 
@@ -44,15 +228,14 @@ ac_dat <- raw %>%
   filter(dias<250) 
 
 ac_dat %>% str
+
 ac_dat %>% 
   group_by(sexo, trat) %>%  
   skim(ac)
 ```
-
+### Grafico exploratorio para ver la evolucion de anticuerpos a lo largo del periodo experimental segun tratamiento y sexo
 ```{r}
 ac_dat %>% 
-  # filter(dias<250) %>% 
-  # filter(ac<100) %>% 
   ggplot()+
   aes(x=dias, y=ac, col=trat)+
   geom_jitter(width=.2, alpha=.5)+
@@ -97,29 +280,63 @@ car::Anova(m1)
 ```{r}
 car::Anova(m3)
 ```
-
-Relacion entre madres neospora - positiva vs peso al nacer
+### Relacion entre Acs madres POSITIVAS Y NEGATIVAS y peso al nacer
 
 ```{r}
+
+ac_cow <- raw %>% 
+  select(id_ternero, trat, sexo, ac_vaca, peso_1, ac_0) %>% 
+  mutate(binom_ac = ifelse(ac_vaca >=6,1,0)) 
+ac_cow
+```
+
+```{r}
+ac_cow1 <- ac_cow %>% 
+  mutate_at(vars(id_ternero, trat, sexo), as.factor) %>% 
+  select(id_ternero, trat, sexo, binom_ac, peso_1, ac_0) 
+ac_cow1
+```
+
+```{r}
+ac_cow1 %>% 
+  slice(-c(23)) %>%
+  ggplot() + 
+  aes(x=binom_ac, y=peso_1, col=trat)+
+  geom_point(alpha=.5) +
+ # geom_smooth(se=T, span=1.2)+
+  facet_wrap("sexo") +
+  theme_bw()
+```
+```{r}
+m6 <- lm(peso_1 ~ binom_ac, data=ac_cow1[-c(23), ] )
+m7 <- lm(peso_1 ~ trat, data=ac_cow1[-c(23), ] )
+m8 <- lm(peso_1 ~ sexo, data=ac_cow1[-c(23), ] )
+m9 <- lm(peso_1 ~ binom_ac+sexo+trat, data=ac_cow1 [-c(23), ])
+m10 <- lm(peso_1 ~ binom_ac*sexo*trat, data=ac_cow1 [-c(23), ])
+
+compare_performance(m6,m7,m8,m9, m10)
+
+```
+```{r}
+car::Anova(m10)
+```
+
+Al explorar el efecto de la presencia o ausencia de infeccion por N. caninum en las madres sobre el peso al nacer de los terneros, solo se ve efeco del sexo de los terneros, pero no hay efecto del tratamiento ni de los anticuerpos de las madres. 
+
+###Relacion entre madres neospora POSITIVAS vs peso al nacer
+```{r}
 ac_vaca_dat <- raw %>% 
-  # pivot_longer(cols = ac_0:ac_250, 
-  #              names_prefix= "ac_", 
-  #              names_to = "dias", 
-  #              values_to = "ac")  %>% 
-  # mutate_at(vars(dias), as.numeric) %>% 
   mutate_at(vars(id_ternero, trat, sexo), as.factor) %>% 
   select(id_ternero, trat, sexo, ac_vaca, peso_1, ac_0) %>% 
-  mutate(binom_ac_vaca  = ifelse(ac_vaca >= 6,1,0))  
-  # filter(ac<100) %>%
-  # filter(dias<250) 
-ac_vaca_dat
+  filter(ac_vaca>=6)
+ ac_vaca_dat
 ```
 
 ```{r}
 ac_vaca_dat %>% 
   slice(-c(23)) %>%
   ggplot() + 
-  aes(x=ac_vaca, y=peso_1,col=trat)+
+  aes(x=ac_vaca, y=peso_1)+
   geom_point(alpha=.5) +
   geom_smooth(se=T, span=1.2)+
   facet_wrap("sexo") +
@@ -130,21 +347,23 @@ ac_vaca_dat %>%
 m6 <- lm(peso_1 ~ ac_vaca, data=ac_vaca_dat[-c(23), ] )
 m7 <- lm(peso_1 ~ trat, data=ac_vaca_dat[-c(23), ] )
 m8 <- lm(peso_1 ~ sexo, data=ac_vaca_dat[-c(23), ] )
-m9 <- lm(peso_1 ~ ac_vaca+sexo, data=ac_vaca_dat [-c(23), ])
-m10 <- lm(peso_1 ~ ac_vaca*sexo, data=ac_vaca_dat [-c(23), ])
+m9 <- lm(peso_1 ~ ac_vaca+sexo+trat, data=ac_vaca_dat [-c(23), ])
+m10 <- lm(peso_1 ~ ac_vaca*sexo*trat, data=ac_vaca_dat [-c(23), ])
 compare_performance(m6,m7,m8,m9, m10)
 
+
 ```
 ```{r}
-car::Anova(m9)
+car::Anova(m10)
 ```
 
 ```{r}
-summary(m9)
+summary(m10)
+
 ```
 
 ```{r}
-em <- emmeans(m9, ~ ac_vaca|sexo, type="response")
+em <- emmeans(m10, ~ ac_vaca|sexo|trat, type="response")
 em  %>% knitr::kable()
 class(em)
 
@@ -158,7 +377,6 @@ res
 ```
 
 ```{r}
-?pwpm
 pwpm(em, adjust = "none")
 ```
 
@@ -169,19 +387,8 @@ res <- res %>%
 res
 ```
 
-```{r}
-res %>%  
-  ggplot() +
-  aes(x=ac_vaca, y=peso_1, col=sexo)+
-  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
-  labs(x = "IgG vaca (IRCP)", y = "Peso al nacer")+  
-  geom_text(aes(label = letras), angle=90, vjust=-1)+
-  geom_jitter(data = ac_vaca_dat, width = .1, alpha=.5) +
-  theme_bw()
-```
 
-```
-
+## Voy a evaluar como afecta el nivel de acs de la madre al nivel de acs del hijo/a al nacer
 ```{r}
 ac_vaca_dat %>% 
   # slice(-c(23)) %>%
@@ -192,14 +399,17 @@ ac_vaca_dat %>%
   geom_point(alpha=.5) +
   geom_smooth(se=T, span=1.2)+
   facet_wrap("sexo") +
+  geom_hline(yintercept = 6, linetype="dashed") + 
   theme_bw()
 ```
 
 ```{r}
-m8 <- lm(ac_0 ~ ac_vaca*sexo, data=ac_vaca_dat[-c(23), ] )
+m8 <- lm(ac_0 ~ ac_vaca*sexo*trat, data=ac_vaca_dat[-c(23), ] )
 m9 <- lm(ac_0 ~ ac_vaca, data=ac_vaca_dat[-c(23), ] )
 m10 <- lm(ac_0 ~ sexo, data=ac_vaca_dat[-c(23), ] )
-compare_performance(m8,m9,m10)
+m11 <- lm(ac_0 ~ ac_vaca+sexo+trat, data=ac_vaca_dat[-c(23), ] )
+m12 <- lm(ac_0 ~ trat, data=ac_vaca_dat[-c(23), ] )
+compare_performance(m8,m9,m10,m11,m12)
 ```
 
 ```{r}
@@ -211,8 +421,33 @@ check_normality(m8)
 ```
 
 ```{r}
-anova(m8)
+anova(m11)
 ```
+
+```{r}
+em <- emmeans(m11, ~ ac_vaca|trat, type="response")
+em  %>% knitr::kable()
+class(em)
+```
+
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         ac_0 = emmean)
+res
+```
+No hubo efecto del tratamiento sobre el nivel de acs pero si se vio afectado por el nivel de acs de la madre
 
 Voy a realizar la prueba U de Mann-Whitney para comparar diferencias entre las madres positivas que tubieron hijos positivos a Neospora y las madres positivas que tubieron hijos seronegativos para Neospora
 
@@ -226,86 +461,97 @@ pacman::p_load(stats)
 ```{r}
 transm <- rio::import("../data/transmision verticas.xlsx")%>%
   clean_names()
-transm %>% str 
-transm %>% head 
+transm
+  
+```
+```{r}
+tv <- c(72.21833, 49.89503,80.40588, 80.40588, 62.42127, 65.99020, 73.89783, 103.07908, 97.13086, 74.10777, 106.43807)
+ntv <- c(7.77, 7.84)
+grupo <- c(rep("transmision_vertical", length(tv)), rep("no_transmision_vertical", length(ntv)))
+estudio <- data.frame(acs=c(tv, ntv), grupo)
+estudio
 
 ```
-
 ```{r}
-#base_de_datos <- read_excel("../data/transmision verticas.xlsx")
-#vacas_tv <- base_de_datos %>% filter(vacas_tv == "Vacas positivas con TV")
-#vacas_no_tv <- base_de_datos %>%  filter(vacas_no_tv == "Vacas positivas sin TV") +
+wilcox.test(acs ~ grupo, data=estudio)
 ```
+#Transmision horizontal
 
+En este analisis considero todos los terneros, aquellos que nacieron infectados y los que no.. por eso creo que esta mal, si nacieron infectados ya no hay TH
 ```{r}
-#transm <- data.frame (vacas_tv = c (72.22,49.90,80.41,62.42,65.99,73.90,103.08,97.13,74.11,106.44,54.02,55.00,41.15,62.84,48.08),
-                        #vacas_no_tv = c (7.77, 7.84))
-
-#realice la prueba U de Mann Whitney
-# wilcox.test (vacas_tv ~ vacas_no_tv, data = base_de_datos)
- 
-```
-
-Transmision horizontal
-
-```{r}
-transm_h <- rio::import("../data/seroconvercion.xlsx")%>%
-  clean_names()
-transm_h %>% str 
-
-```
-
-```{r}
-transm_h_dat <- transm_h %>% 
+transm_h <- raw %>% 
   pivot_longer(cols = ac_0:ac_63, 
               names_prefix= "ac_", 
                names_to = "dias", 
                 values_to = "ac")  %>% 
    mutate_at(vars(dias), as.numeric) %>% 
   mutate_at(vars(id_ternero, trat, sexo), as.factor)
-  #select(id_ternero, trat, sexo,  ac_0) %>% 
-  #mutate(binom_ac_vaca  = ifelse(ac_vaca >= 6,1,0))  
-  # filter(ac<100) %>%
-  # filter(dias<250) 
-transm_h_dat
+  transm_h
 ```
 
 ```{r}
-transm_h_dat %>% 
+transm_h %>% 
   slice(-c(23)) %>%
   ggplot() + 
   aes(x=dias, y=ac, col=trat)+
   geom_point(alpha=.5) +
   geom_smooth(se=T, span=1.2)+
-  geom_hline(yintercept = 6, linetype="dashed") + 
+  geom_hline(yintercept = 6, linetype="dashed") +
+  facet_wrap("sexo")
   theme_bw()
 ```
 
 ```{r}
-reg1 <- lm(ac ~ dias, data=transm_h_dat )
-reg2 <- lm(ac ~ sexo, data=transm_h_dat)
-reg3 <- lm(ac ~ dias*sexo, data=transm_h_dat)
-reg4 <- lm(ac ~ dias+sexo, data=transm_h_dat)
-compare_performance(reg1, reg2, reg3, reg4)
+reg1 <- lm(ac ~ dias, data=transm_h )
+reg2 <- lm(ac ~ sexo, data=transm_h)
+reg3 <- lm(ac ~ dias*sexo*trat, data=transm_h)
+reg4 <- lm(ac ~ dias+sexo+trat, data=transm_h)
+reg5 <- lm(ac ~ trat, dat=transm_h)
+compare_performance(reg1, reg2, reg3, reg4, reg5)
  
 ```
 
 ```{r}
-car::Anova(reg1)
+car::Anova(reg3)
 ```
 
 ```{r}
-transm_h_dat %>% 
+transm_h %>% 
   slice(-c(23)) %>%
   ggplot() + 
-  aes(x=dias, y=ac)+
+  aes(x=dias, y=ac, col=trat)+
+  facet_wrap("sexo")+
   geom_point(alpha=.5) +
   geom_smooth(se=T, span=1.2)+
   geom_hline(yintercept = 6, linetype="dashed") + 
   theme_bw()
 ```
+```{r}
+em <- emmeans(reg3, ~ sexo, type="response")
+em  %>% knitr::kable()
+class(em)
 
-Ahora solo considerando los que seroconvirtieron
+```
+
+```{r}
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
+```
+
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         acs = emmean)
+res
+```
+
+###Ahora solo considerando los que seroconvirtieron
 
 ```{r}
 serocon<- rio::import("../data/seroconvercion.xlsx")%>%
@@ -322,11 +568,7 @@ serocon_dat <- serocon %>%
                 values_to = "ac")  %>% 
    mutate_at(vars(dias), as.numeric) %>% 
   mutate_at(vars(id_ternero, trat, sexo), as.factor)
-  #select(id_ternero, trat, sexo,  ac_0) %>% 
-  #mutate(binom_ac_vaca  = ifelse(ac_vaca >= 6,1,0))  
-  # filter(ac<100) %>%
-  # filter(dias<250) 
-serocon_dat
+  serocon_dat
 ```
 
 ```{r}
@@ -339,21 +581,15 @@ serocon_graph <-
   geom_line(stat = "summary", fun=mean)+
   # geom_line(stat = "summary", fun=median)+
   # geom_smooth(se=F, method = "lm")+
+  facet_wrap("trat")+
   theme_bw()+
   geom_hline(yintercept = 6, linetype="dashed") + 
   labs(y="IgG (IRCP)", x = "Días desde nacimiento")
-
+ 
 serocon_graph
 ```
+Como vemos todos los terneros que seroconvirtieron pertenecian al grupo control, aunque el n para sacar conclusiones es muy bajo
 
-```{r}#
-serocon_dat2 <- serocon_dat %>%  
-  group_by(dias) %>% 
-  summarise(
-    mean = mean(ac),
-    sd = sd(ac))
-serocon_dat2
-```
 ```{r}
 serocon_dat <- serocon %>% 
   pivot_longer(cols = ac_0:ac_63, 
@@ -381,12 +617,6 @@ compare_performance(reg6, reg7, reg8, reg9)
 ```{r}
 anova(reg6)
 ```
-
-```{r}#
-serocon_dat %>% 
-  janitor::tabyl(dias)
-
-```
 ```{r}
 serocon_dat %>% 
   group_by(dias) %>% 
@@ -399,17 +629,11 @@ serocon_dat
 
 
 ```{r}
-dodge <- position_dodge(width = 0.5)
-
 serocon_dat %>% 
   ggplot()  +
   aes(x = dias, y = ac) + 
   geom_point(position = dodge)
 
-```
-
-```{r}
-geom_point(position = dodge)
 ```
 
 ```{r}
@@ -432,7 +656,6 @@ res
 ```
 
 ```{r}
-?pwpm
 pwpm(em, adjust = "none")
 ```
 
@@ -451,36 +674,110 @@ res %>%
   labs(x = "Dias de vida", y = "IgG (IRPC)")+  
   geom_text(aes(label = letras), angle=90, vjust=-1)+
   geom_jitter(data = serocon_dat, width = .1, alpha=.5) +
+ 
   theme_bw()
+
 ```
-
-
 ```{r}
 
-serocon_dat <- serocon %>% 
+antipeso <- raw %>% 
   pivot_longer(cols = ac_0:ac_63, 
               names_prefix= "ac_", 
                names_to = "dias", 
                 values_to = "ac")  %>% 
-   mutate_at(vars(dias), as.factor) %>% 
-  mutate_at(vars(id_ternero, trat, sexo), as.factor)
-  #select(id_ternero, trat, sexo,  ac_0) %>% 
+  mutate_at(vars(dias), as.factor) %>% 
+  mutate_at(vars(id_ternero, trat, sexo), as.factor) %>% 
+  select(id_ternero, trat, sexo,  ac, peso_1, peso_7, peso_14, peso_21, peso_28, peso_35, peso_42, peso_49, peso_56, peso_63 )
   #mutate(binom_ac_vaca  = ifelse(ac_vaca >= 6,1,0))  
   # filter(ac<100) %>%
   # filter(dias<250) 
-serocon_dat
+antipeso
+```
+```{r}
+ac_peso <- antipeso %>% 
+  pivot_longer(cols = peso_1:peso_63, 
+               names_prefix= "peso_", 
+               names_to = "dias", 
+               values_to = "peso") %>% 
+     mutate_at(vars(dias), as.numeric) %>% 
+  mutate_at(vars(id_ternero, trat, sexo), as.factor) %>% 
+  select(id_ternero, trat, sexo, dias, ac, peso)
+
+ac_peso 
+
+ac_peso %>% 
+  group_by(sexo, trat) %>%  
+  skim(ac)
+```
+```{r}
+m1 <- lm(peso~ac, data = ac_peso)
+m2 <- lm(peso~trat, data = ac_peso)
+m3 <- lm(peso~sexo, data = ac_peso)
+m4 <- lm(peso~dias, data = ac_peso)
+m5 <- lm(peso~ac*trat*sexo*dias, data = ac_peso)
+m6 <- lm(peso~ac+sexo+trat+dias, data = ac_peso)
+compare_performance(m1,m2,m3,m4,m5,m6)
 ```
 
 ```{r}
-correlacion<-serocon_dat %>%  select(ac, dias)
-correlacion
-long_corr <- correlacion %>% 
-  correlation (method = "spearman")
-long_corr
+anova(m5)
+```
+```{r}
+em <- emmeans(m5, ~ trat, type="response")
+em  %>% knitr::kable()
+class(em)
+
 ```
 
 ```{r}
-long_corr2 <- correlacion %>% 
-  correlation (method = "pearson")
-long_corr2
+res  <- cld(em, 
+            Letters = letters, 
+            alpha = .05)  
+res
 ```
+
+```{r}
+pwpm(em, adjust = "none")
+```
+
+```{r}
+res <- res %>% 
+  mutate(letras = str_squish(.group), 
+         peso = emmean)
+res
+```
+```{r}
+acColor <- "#69b3a2" #Color para Acs
+pesoColor <- "#CD6155" # Color para peso
+acpeso_graph<-data.frame(cbind(ac_peso, acColor,pesoColor))
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  geom_text(aes(label = letras), angle=90, vjust=-1)+
+  geom_jitter(data = serocon_dat, width = .1, alpha=.5) +
+ggplot(acpeso_graph, aes(x=dias))+
+  geom_point(aes(y=peso), size=1, color=pesoColor)+ 
+  geom_point(aes(y=ac), size=1, color=acColor)+
+  geom_jitter(width=.2, alpha=.5)+
+  geom_line(stat = "summary", fun=mean)+
+  geom_pointrange(aes(ymin = lower.CL, ymax = upper.CL))+
+  geom_text(aes(label = letras), angle=90, vjust=-1)+
+  geom_jitter(data = serocon_dat, width = .1, alpha=.5) +
+ 
+  theme_bw()+
+
+  scale_y_continuous(name="IgG, RICP",
+               sec.axis = sec_axis(~.*1,name = "Body weight, Kg"))+
+    theme(
+    axis.title.y = element_text(color=pesoColor, size=13),
+    axis.title.y.right = element_text(color=acColor, size = 13)
+  )+
+    facet_wrap("trat")+
+  theme_bw()+
+  geom_hline(yintercept = 6, linetype="dashed") + 
+
+  xlab("Days from birth")
+
+```
+
+
+
+
