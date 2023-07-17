@@ -1,0 +1,762 @@
+---
+title: "Trabajo encuesta guacheras"
+output: html_document
+---
+
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, janitor,  skimr, rio, here,
+               GGally, correlation, performance, 
+               emmeans, multcomp, oddsratio, coefplot)
+ 
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+## Datos
+
+```{r}
+dat <- import(here::here("survey/survey23.csv"))
+dat %>% skim() 
+str(dat)
+```
+
+
+### Exploracion 
+
+```{r}
+library(scales)
+dat %>% 
+  pivot_longer(everything()) %>% 
+  group_by(name,value) %>% 
+  count() %>% 
+  group_by(name) %>% 
+  mutate(prop = n/sum(n, na.rm=TRUE)) %>% 
+   ggplot(aes(x=name, y=prop, fill=value)) +
+  geom_bar(stat="identity") + 
+  geom_text(aes(label = percent(prop)), 
+            position = position_stack(vjust = 0.5), size = 4) +
+  scale_y_continuous(name="", labels = percent) +
+  coord_flip()
+  
+  
+```
+
+## Mortalidad
+```{r}
+dat_mort <- dat %>% 
+  select(-c(feed_cows, milk_yield, scc, afb, ffi)) %>% 
+  drop_na()
+dat_mort %>% skim()
+```
+
+### Regresion lineal multiple
+
+```{r}
+mod <- lm(mortality ~ ., data= dat_mort)
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+summary(mod_step)
+```
+
+```{r}
+coefplot(mod_step, parm = -1)
+```
+
+En este grafico podemos ver todas las variables que tienen efecto sobre mortalidad la disminuyen, menos vacunacion la cual muestra que al aumentar la vacunacion aumenta la mortalidad. Preguntar a Lu como armo la tabla..
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE, rank = TRUE) 
+ri
+```
+
+El volumen de dieta liquida explica el 30% de la mortalidad, seguido de capacitaciones con 21% e higiene con 18%
+
+```{r}
+dat %>% 
+  select(mortality, vacination, experience, capacitations, liquid_feeding_volume, hygiene) %>% 
+  ggpairs()
+
+dat %>% 
+  ggplot() + 
+  aes(vacination, mortality) + 
+  geom_jitter(width = .1) + 
+  geom_smooth()
+```
+Este ultimo grafico exploratorio muestra que en realidad hay pocos datos para el nivel de vacunacion 1 y a lo mejor ahi esta la explicacion del porque da raro el resultado (>vacunacion>mortalidad)
+
+## Arbol de clasificacion
+
+```{r}
+pacman::p_load(rpart, rpart.plot)
+# https://www.displayr.com/how-is-variable-importance-calculated-for-a-random-forest/#:~:text=This%20importance%20is%20a%20measure,accuracy%20due%20to%20random%20noise.
+```
+
+```{r}
+dat$mortality %>% hist
+dat1 <- dat %>% 
+  mutate(mortal_cat = cut(mortality, 
+                          breaks=c(-Inf, 5, 10, Inf),
+                          labels=c("low","middle","high"))) %>% 
+  rowid_to_column()
+```
+
+
+```{r}
+dat1 %>%
+  count(mortal_cat) %>%
+  mutate(prop = prop.table(n))
+
+dtree <- rpart(
+mortal_cat ~ liquid_feeding_volume+hygiene+capacitations+experience, 
+               data = dat1)
+dtree
+```
+
+```{r}
+summary(dtree)
+```
+
+
+```{r}
+rpart.plot(dtree)
+```
+
+Clasifica los casos. Ayuda a explicar como se relacionan las variables con la mortalidad. Asi, de las encuestas con baja mortalidad un 42% daba alto vol de dieta liquida (>=3 - preguntar a Lu como hizo la clasificacion para interpretar mejor), de ese 42% un 92% tubo baja mortalidad. De los que dieron menor volumen de dieta iquida, cuando realizaron practicas de higiene y capacitacion tuvieron baja mortalidad (25%) y media mortalidad el 19%. Mientras que el 14% restante que alimento con poco volumen y no hizo nada mas (higiene ni capacitacion) tuvo alta mortalidad.
+
+- Importancia de las variables predictoras sobre mortalidad
+
+```{r}
+df <- data.frame(imp = dtree$variable.importance) %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+# Basic piechart
+
+df %>% 
+  ggplot() +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
+
+```{r}
+pacman::p_load(relaimpo)
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+> Odds de mortalidad segun experiencia del personal, higiene, volumen de dieta liquida capacitaciones, y vacunacion preparto
+## Transformo la variable mortalidad a binomial
+
+```{r}
+df <- dat %>% 
+  mutate(Mortality = if_else(mortality>=5, TRUE, FALSE))
+str(df)
+```
+
+## Regresion logistica
+
+```{r}
+m1 <- glm(Mortality ~ liquid_feeding_volume+experience+hygiene+vacination+capacitations, 
+          data = df, family = binomial)
+```
+
+```{r}
+summary(m1)
+```
+
+```{r}
+pacman::p_load(sjPlot)
+tab_model(m1)
+```
+
+Podemos ver en la tabla que se reduce en un 80% (1-0.2) la probabilidad de que la mortalidad sea mayor al 5% cuando el volumen de dieta liquida pasa de 2 a 4 litros y de 4 a 6 litros. (Por cada salto, la probabilidad re reduce un 80%).
+
+```{r}
+lreg.or <- exp(cbind(OR = coef(m1), confint(m1)))
+```
+
+```{r}
+round(lreg.or, digits=4)
+```
+
+```{r}
+library(questionr)
+```
+
+```{r}
+odds.ratio(m1, level=0.95)
+```
+
+```{r}
+m1$coefficients
+exp(m1$coefficients)
+```
+
+```{r}
+exp(confint(m1))
+```
+```{r}
+pacman::p_load(OddsPlotty)
+```
+
+```{r}
+library(finalfit)
+# OR plot
+data(df)
+explanatory = c("liquid_feeding_volume","experience","hygiene","vacination","capacitations")
+dependent = "Mortality"
+df %>%
+   or_plot(dependent, explanatory)
+```
+
+```{r}
+boxLabels = c("Liquid feeding volume", "Experience", "Hygiene", "Vacination", "Capacitation")
+boxOdds =  c(0.1993, 0.6671, 0.5816, 2.8164, 0.4166)
+boxCILow = c(0.0486, 0.3451, 0.2190, 0.9555, 0.1502)
+boxCIHigh = c(0.7085, 1.2349, 1.4249, 9.4506, 1.0292)
+```
+
+
+```{r}
+df1 <- data.frame(yAxis = boxLabels,
+  boxOdds = 
+   c(0.1993, 0.6671, 0.5816, 2.8164, 0.4166),
+  boxCILow = 
+   c(0.0486, 0.3451, 0.2190, 0.9555, 0.1502),
+  boxCIHigh = 
+  c(0.7085, 1.2349, 1.4249, 9.4506, 1.0292))
+```
+
+```{r}
+(p <- ggplot(df1, aes(x = boxOdds, y = boxLabels)) +
+  geom_vline(aes(xintercept = 1), size = .25, linetype = 'dashed') +
+  geom_errorbarh(aes(xmax = boxCIHigh, xmin = boxCILow), size = .5, height = 
+      .2, color = 'gray50') +
+  geom_point(size = 3.5, color = 'orange') +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank()) +
+  scale_x_continuous(breaks = seq(0,7,1) ) +
+  coord_trans(x = 'log10') +
+  ylab('') +
+  xlab('Odds ratio (log scale)') +
+  annotate(geom = 'text', y =1.1, x = 3.5, label ='Model p < 0.001\nPseudo 
+R^2 = 0.10', size = 3.5, hjust = 0) + ggtitle('Odds ratio for Mortality')
+)
+```
+
+
+### Milk yield
+
+```{r}
+mod <- lm(milk_yield ~ ., data= na.omit(dat))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+summary(mod_step)
+```
+#### Grafico el modelo
+```{r}
+coefplot(mod_step, parm = -1)
+```
+En este grafico podemos ver todas las variables que tienen efecto sobre milk_yield aumentan (segun el modelo solo la alimentacion de las vacas tiene efecto y hay tendencia en el volumen de calostro).
+
+#### Importancia relativa
+Analizo la importancia relativa de las variables presentes en el modelo
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+La alimentacion de las vacas explica el 40% de la produccion de leche, seguido del volumen de calostro que explica el 20%
+
+```{r}
+dat %>% 
+  select(milk_yield,experience, realiza_calostrado, clostrum_feeding_vol, feed_cows, hygiene) %>% 
+  ggpairs()
+```
+
+# Random forest
+
+```{r}
+dat$milk_yield %>% hist
+dat1 <- dat %>% 
+  mutate(milk_yield_cat = cut(milk_yield, 
+                          breaks=c(-Inf, 7000, 8150, Inf),
+                          labels=c("low","middle","high")))
+dat1
+```
+```{r}
+library(gtools)
+dat2<- dat1 %>%
+    mutate( milk_yield_band = quantcut(milk_yield, q = c(0, 0.33, 0.66, 1), 
+            labels = c("low", "mid", "high")))
+
+table(dat2$milk_yield, dat2$milk_yield_band)
+
+```
+
+
+```{r}
+# dat2 <- tibble::rowid_to_column(dat)
+# set.seed(20) # predictable randomness
+# # split the data into training and test data (arbitrarily!)
+# test_data <- dat2 %>% slice_sample(prop = 0.2)
+# train_data <- anti_join(dat1, test_data, by = "rowid")
+# set the target variable
+targ <- "milk_yield_band"
+# set the predictors
+preds <- c("clostrum_feeding_vol", "hygiene", "feed_cows", "experience", "realiza_calostrado")
+# build a simple rpart decision tree using the default settings
+dtree <- rpart(formula = dat2[,targ] ~ ., data = dat2[,preds])
+
+```
+
+## Arbol de clasificacion
+```{r}
+rpart.plot(dtree)
+dtree
+```
+No entiendo este arbol.....
+
+## Histograma de importancia de las variables predictoras sobre mortalidad
+```{r}
+df <- data.frame(imp = dtree$variable.importance)
+df2 <- df %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+ggplot(df2) +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+ 
+ 
+ACA YA NO ENTIENDO MAS NADA (PROXIMOS 2 CHUNCK)
+```{r}
+
+# precisa caret y no instala
+dtree_preds <- predict(dtree, test_data)
+confusionMatrix(
+  data = ifelse(dtree_preds >= 0.5, 1, 0), 
+  reference = test_data$mortal_cat
+  )
+```
+
+
+
+```{r}
+pacman::p_load(relaimpo)
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+#Odds de milk yield segun experiencia del personal, higiene, volumen de dieta liquida capacitaciones, y capacitacion
+## Transformo la variable milk yield a trinomial?
+```{r}
+df <- dat2 
+str(df)
+
+```
+## Modelo lineal generalizado
+```{r}
+m1 <- glm(milk_yield_band ~ liquid_feeding_volume+experience+hygiene+vacination+capacitations, data = df, family = binomial)
+```
+```{r}
+summary(m1)
+```
+```{r}
+pacman::p_load(sjPlot)
+tab_model(m1)
+```
+Podemos ver en la tabla que no da nada significativo
+
+```{r}
+lreg.or <- exp(cbind(OR = coef(m1), confint(m1)))
+```
+```{r}
+round(lreg.or, digits=4)
+
+```
+```{r}
+library(questionr)
+```
+```{r}
+odds.ratio(m1, level=0.95)
+```
+```{r}
+m1$coefficients
+exp(m1$coefficients)
+```
+
+```{r}
+exp(confint(m1))
+
+```
+```{r}
+pacman::p_load(OddsPlotty)
+```
+```{r}
+library(dplyr)
+library(finalfit)
+library(ggplot2)
+
+pacman::p_load(finalfit)
+pacman::p_load(ggplot2)
+# OR plot
+data(df)
+explanatory = c("clostrum_feeding_vol", "hygiene", "feed_cows", "experience", "realiza_calostrado")
+dependent = "milk_yield_band"
+df %>%
+   or_plot(dependent, explanatory)
+
+
+```
+
+```{r}
+boxLabels = c("clostrum_feeding_vol", "hygiene", "feed_cows", "experience", "realiza_calostrado")
+boxOdds =  c(0.9447, 1.7225, 1.8759, 2.2817, 0.9982)
+boxCILow = c(0.26225, 0.9459, 0.8196, 0.8192, 0.4040)
+boxCIHigh = c(3.3416, 3.3934, 4.6168, 6.9552, 2.4798)
+```
+
+
+```{r}
+df1 <- data.frame(yAxis = boxLabels,
+  boxOdds = 
+   c(0.1993, 0.6671, 0.5816, 2.8164, 0.4166),
+  boxCILow = 
+   c(0.0486, 0.3451, 0.2190, 0.9555, 0.1502),
+  boxCIHigh = 
+  c(0.7085, 1.2349, 1.4249, 9.4506, 1.0292))
+```
+
+```{r}
+(p <- ggplot(df1, aes(x = boxOdds, y = boxLabels)) +
+  geom_vline(aes(xintercept = 1), size = .25, linetype = 'dashed') +
+  geom_errorbarh(aes(xmax = boxCIHigh, xmin = boxCILow), size = .5, height = 
+      .2, color = 'gray50') +
+  geom_point(size = 3.5, color = 'orange') +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank()) +
+  scale_x_continuous(breaks = seq(0,7,1) ) +
+  coord_trans(x = 'log10') +
+  ylab('') +
+  xlab('Odds ratio (log scale)') +
+  annotate(geom = 'text', y =1.1, x = 3.5, label ='Model p < 0.001\nPseudo 
+R^2 = 0.10', size = 3.5, hjust = 0) + ggtitle('Odds ratio for Milk Yield')
+)
+```
+### Somatic count cells
+```{r}
+mod <- lm(scc ~ capacitations + mortality + +hygiene+clostrum_feeding_vol+vacination+ disease_ranking + feed_cows  , data= dat1)
+```
+```{r}
+car::Anova(mod)
+```
+
+## Regresion lineal multiple
+
+```{r}
+mod <- lm(scc ~ hygiene + calostrum_feeding_num + realiza_calostrado + capacitations, data= na.omit(dat))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver tanto en el modelo manual como en el que el mismo r arroja, el conteo de celulas somaticos se ve afectado por las capacitaciones del personal y hay una tendencia a que la higiene efecte las ccs.
+```{r}
+library(coefplot)
+```
+
+```{r}
+coefplot(mod_step, parm = -1)
+```
+
+En este grafico podemos ver que ambas variables, capacitaciones e higiene, disminuyen el conteo de celulas somaticas.
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+Las capacitaciones explican el 55% de las ccs y la higiene el 45%.
+```{r}
+dat %>% 
+  select(scc, hygiene, calostrum_feeding_num, realiza_calostrado, capacitations, vacination, experience) %>% 
+  ggpairs()
+```
+
+## Arbol de clasificacion
+
+```{r}
+dat$scc %>% hist
+dat1 <- dat %>% 
+  mutate(scc = if_else(scc >= 250, TRUE, FALSE))
+str(dat1)  
+rowid_to_column(dat1)
+```
+
+```{r}
+dat1 %>%
+  count(scc) %>%
+  mutate(prop = prop.table(n))
+
+dtree <- rpart(
+scc ~ hygiene+capacitations+calostrum_feeding_num + realiza_calostrado, 
+               data = dat1)
+dtree
+```
+
+```{r}
+summary(dtree)
+```
+
+```{r}
+rpart.plot(dtree)
+```
+Se puede interpretar que cuando se realizan buenas practicas de higiene un 41% tiene baja ccs y si a su vez el personal tiene capacitaciones
+
+```{r}
+df <- data.frame(imp = dtree$variable.importance) %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+# Basic piechart
+
+df %>% 
+  ggplot() +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
+> Odds de SCC segun hygiene, calostrum_feeding_num, realiza_calostrado, capacitations, vacination, experience
+## Transformo la variable mortalidad a binomial
+
+```{r}
+df <- dat %>% 
+  mutate(SCC = if_else(scc>=250, TRUE, FALSE))
+str(df)
+```
+
+## Regresion logistica
+
+```{r}
+m1 <- glm(SCC ~ hygiene+ calostrum_feeding_num+ realiza_calostrado+ capacitations+ vacination+ experience, 
+          data = df, family = binomial)
+```
+
+```{r}
+summary(m1)
+```
+
+```{r}
+tab_model(m1)
+```
+
+No hay odds de nada
+
+
+### Age at first breeding
+
+#### Regresion lineal multiple
+
+```{r}
+mod <- lm(afb ~ ., data= na.omit(dat))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver la edad a la primera inseminacion se ve afectada por capacitacioes del personal y el sistema de crianza adoptado en la gachera
+
+```{r}
+coefplot(mod_step, parm = -1)
+```
+
+En este grafico podemos ver que ambas variables, capacitaciones y el metodo de crianza, disminuyen l edad a la primera inseminacion.
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+Las capacitaciones explican el 53% de la edad a la primera inseminacion y el sistema de crianza el 22%.
+```{r}
+dat %>% 
+  select(afb, capacitations, rearing_system) %>% 
+  ggpairs()
+```
+
+## Arbol de clasificacion
+```{r}
+dat$afb %>% hist
+dat1 <- dat %>% 
+  mutate(scc = if_else(afb>=15, TRUE, FALSE)+
+           drop_na(dat1))
+str(dat1)  
+rowid_to_column(dat1)
+```
+
+```{r}
+dat1 %>%
+  count(afb) %>%
+  mutate(prop = prop.table(n))
+
+dtree <- rpart(
+afb ~ capacitations + rearing_system, 
+               data = dat1)
+dtree
+```
+
+
+```{r}
+summary(dtree)
+```
+
+
+```{r}
+rpart.plot(dtree)
+```
+
+
+```{r}
+df <- data.frame(imp = dtree$variable.importance) %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+# Basic piechart
+
+df %>% 
+  ggplot() +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
+
+> Odds de afb segun hygiene, calostrum_feeding_num, realiza_calostrado, capacitations, vacination, experience, rearing system
+## Transformo la variable mortalidad a binomial
+
+```{r}
+df <- dat %>% 
+  mutate(AFB = if_else(afb>15, TRUE, FALSE))
+str(df)
+```
+
+## Regresion logistica
+
+```{r}
+m1 <- glm(AFB ~ hygiene+ calostrum_feeding_num+ realiza_calostrado+ capacitations+ vacination+ experience + rearing_system, 
+          data = df, family = binomial)
+```
+
+```{r}
+summary(m1)
+```
+
+```{r}
+tab_model(m1)
+```
+
+No hay odds de nada
+
+
+### Fertility at first insemination
+```{r}
+mod5 <- lm(ffi ~ prepartum + realiza_calostrado + hygiene , data= dat)
+```
+```{r}
+car::Anova(mod5)
+
+```
+
+```{r}
+mod <- lm(ffi ~ ., data= na.omit(dat))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver en ambos modelos, la fertilidad a la primera inseminacion se ve afectada por las caracteristicas del preparto
+
+
+## Analisis descriptivo de la encuesta
+
+```{r}
+str(dat)
+```
+
+```{r}
+pacman::p_load(car)
+```
+
+```{r}
+hist(dat$disease_ranking,  freq=TRUE,
+     main='Histograma para disease_ranking',
+     xlab='Disease',
+     ylab='Frecuencia')
+```
+
+
+```{r}
+res <- t.test(x=dat$disease_ranking, conf.level=0.95)
+res$conf.int
+```
+
+```{r}
+str(dat$prepartum)
+new<-dat %>% 
+  mutate(as.factor(prepartum))
+new
+
+str(new)
+```
+
+```{r}
+Prepartum<-table(new$`as.factor(prepartum)`)
+```
+```{r}
+library(sjmisc) # Utilidades para encuestas con etiquetas
+library(survey) # Análisis de encuestas complejas
+library(car)    # Inferencia de modelos
+```
+
+
+```{r}
+porcentajes <- prop.table(Prepartum)                     #F) Calcular frecuencias relativas
+porcentaje <- as.data.frame(Prepartum); porcentaje   #G) Convertir a data frame
+```
+```{r}
+dat %>% frq(prepartum,weights=peso,sort.frq="desc") %>% kable()
+```
+
+
+
+
+
