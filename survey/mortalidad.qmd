@@ -1,3 +1,25 @@
+```{r data}
+dat <- rio::import(here::here("survey/survey23.csv"))
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, janitor,  skimr, 
+               # GGally, correlation, 
+               performance, 
+               scales, 
+               # emmeans, multcomp, finalfit,  
+               # oddsratio,
+               coefplot, 
+               OddsPlotty, 
+               relaimpo, 
+               gtools, 
+               SjPlot)
+pacman::p_load(rpart, rpart.plot)
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+
 ## Mortalidad
 
 ```{r}
@@ -14,37 +36,9 @@ mod_bin <- glm(mortality > 5 ~ ., data=dat_mort)
 mod_step <- stepAIC(mod_bin,  direction="both")
 summary(mod_step)
 odds_plot(mod_step)
-
-# dat1 <- dat %>% 
-#   mutate(mortal_cat = cut(mortality, 
-#                           breaks=c(-Inf, 5, 10, Inf),
-#                           labels=c("low","middle","high"))) %>% 
-# rowid_to_column()
-# dat1 %>%
-#   count(mortal_cat) %>%
-#   mutate(prop = prop.table(n))
 ```
-
-### Regresion logistica
-
 
 Podemos ver en la tabla que se reduce en un 80% (1-0.2) la probabilidad de que la mortalidad sea mayor al 5% cuando el volumen de dieta liquida pasa de 2 a 4 litros y de 4 a 6 litros. (Por cada salto, la probabilidad re reduce un 80%).
-
-```{r}
-lreg.or <- exp(cbind(OR = coef(m1), confint(m1)))
-```
-
-```{r}
-round(lreg.or, digits=4)
-```
-
-
-```{r}
-odds.ratio(m1, level=0.95)
-```
-
-
-
 
 ### Regresion lineal multiple
 

@@ -1,0 +1,103 @@
+```{r data}
+dat <- rio::import(here::here("survey/survey23.csv"))
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, janitor,  skimr, rio, here,
+               GGally, correlation, performance, scales, 
+               # emmeans, multcomp, finalfit,  
+               oddsratio, coefplot, OddsPlotty, relaimpo, gtools, SjPlot)
+pacman::p_load(rpart, rpart.plot)
+pacman::p_load(sjPlot)
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+# Milk yield
+
+```{r}
+dat_milk <- dat %>% 
+  select(-c(feed_cows, mortality, scc, afb, ffi)) %>% 
+  drop_na()
+dat_milk %>% skim()
+```
+
+## Reg lineal multiple
+
+```{r}
+mod <- lm(milk_yield ~ ., data= dat_milk)
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+summary(mod_step)
+```
+
+```{r}
+coefplot(mod_step, intercept = FALSE)
+```
+En este grafico podemos ver todas las variables que tienen efecto sobre milk_yield aumentan (segun el modelo solo la alimentacion de las vacas tiene efecto y hay tendencia en el volumen de calostro).
+
+* Importancia relativa
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+La alimentacion de las vacas explica el 40% de la produccion de leche, seguido del volumen de calostro que explica el 20%
+
+
+## Random forest
+
+```{r}
+dat_milk$milk_yield %>% hist
+```
+
+```{r}
+dat2 <- dat_milk %>%
+    mutate( milk_yield_band = quantcut(milk_yield, q = c(0, 0.33, 0.66, 1), 
+            labels = c("low", "mid", "high")))
+
+table(dat2$milk_yield, dat2$milk_yield_band)
+```
+
+```{r}
+dat2 %>% names
+# set the target variable
+targ <- "milk_yield_band"
+# set the predictors
+preds <- c(
+"vacination", "prepartum", "experience", "capacitations","rearing_system","realiza_calostrado",
+"calostrum_feeding_num", "clostrum_feeding_vol","liquid_feeding_volume", "hygiene",                "disease_ranking")
+
+
+# build a simple rpart decision tree using the default settings
+dtree <- rpart(formula = dat2[,targ] ~ ., data = dat2[,preds])
+```
+
+## Arbol de clasificacion
+
+```{r}
+rpart.plot(dtree)
+# dtree
+```
+
+* Histograma de importancia de las variables predictoras sobre mortalidad
+
+```{r}
+df <- data.frame(imp = dtree$variable.importance)
+df2 <- df %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+
+ggplot(df2) +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+

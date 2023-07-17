@@ -1,0 +1,306 @@
+```{r data}
+dat <- rio::import(here::here("survey/survey23.csv"))
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, janitor,  skimr, rio, here,
+               GGally, correlation, performance, scales, 
+               # emmeans, multcomp, finalfit,  
+               oddsratio, coefplot, OddsPlotty, relaimpo, gtools, SjPlot)
+pacman::p_load(rpart, rpart.plot)
+pacman::p_load(sjPlot)
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+# Somatic count cells
+
+```{r}
+dat_scc <- dat %>% 
+  select(-c(afb)) %>% 
+  drop_na()
+dat_scc %>% skim()
+```
+
+
+```{r}
+mod <- lm(scc ~ capacitations + mortality + +hygiene+clostrum_feeding_vol+vacination+ disease_ranking + feed_cows  , data=dat_scc)
+```
+
+```{r}
+car::Anova(mod)
+```
+
+## Regresion lineal multiple
+
+```{r}
+mod <- lm(scc ~ hygiene + calostrum_feeding_num + realiza_calostrado + capacitations, data= na.omit(dat))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver tanto en el modelo manual como en el que el mismo r arroja, el conteo de celulas somaticos se ve afectado por las capacitaciones del personal y hay una tendencia a que la higiene efecte las ccs.
+
+```{r}
+coefplot(mod_step, intercept=FALSE)
+```
+
+En este grafico podemos ver que ambas variables, capacitaciones e higiene, disminuyen el conteo de celulas somaticas.
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+Las capacitaciones explican el 55% de las ccs y la higiene el 45%.
+
+## Arbol de clasificacion
+
+```{r}
+dat_scc$scc %>% hist
+dat_scc <- dat_scc %>% 
+  mutate(scc = if_else(scc >= 250, TRUE, FALSE))
+str(dat_scc)  
+rowid_to_column(dat_scc)
+```
+
+```{r}
+# dat1 %>%
+#   count(scc) %>%
+#   mutate(prop = prop.table(n))
+
+dtree_scc <- rpart(
+scc ~ hygiene+capacitations+calostrum_feeding_num + realiza_calostrado, 
+               data = dat_scc)
+dtree
+```
+
+```{r}
+# summary(dtree)
+```
+
+```{r}
+rpart.plot(dtree_scc)
+```
+Se puede interpretar que cuando se realizan buenas practicas de higiene un 41% tiene baja ccs y si a su vez el personal tiene capacitaciones
+
+```{r}
+data.frame(imp = dtree_scc$variable.importance) %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))%>% 
+  ggplot() +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
+> Odds de SCC segun hygiene, calostrum_feeding_num, realiza_calostrado, capacitations, vacination, experience
+## Transformo la variable mortalidad a binomial
+
+```{r}
+dat_scc <- dat_scc %>% 
+  mutate(SCC = if_else(scc>=250, TRUE, FALSE))
+```
+
+## Regresion logistica
+
+```{r}
+m1 <- glm(scc>=250 ~ hygiene+ calostrum_feeding_num+ realiza_calostrado+ capacitations+ vacination+ experience,  data = dat_scc, family = binomial)
+```
+
+```{r}
+summary(m1)
+```
+
+```{r}
+tab_model(m1)
+```
+
+No hay odds de nada
+
+
+### Age at first breeding
+
+#### Regresion lineal multiple
+
+```{r}
+mod <- lm(afb ~ ., data= na.omit(dat))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver la edad a la primera inseminacion se ve afectada por capacitacioes del personal y el sistema de crianza adoptado en la gachera
+
+```{r}
+coefplot(mod_step, parm = -1)
+```
+
+En este grafico podemos ver que ambas variables, capacitaciones y el metodo de crianza, disminuyen l edad a la primera inseminacion.
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+Las capacitaciones explican el 53% de la edad a la primera inseminacion y el sistema de crianza el 22%.
+```{r}
+dat %>% 
+  select(afb, capacitations, rearing_system) %>% 
+  ggpairs()
+```
+
+## Arbol de clasificacion
+```{r}
+dat$afb %>% hist
+dat1 <- dat %>% 
+  mutate(scc = if_else(afb>=15, TRUE, FALSE)+
+           drop_na(dat1))
+str(dat1)  
+rowid_to_column(dat1)
+```
+
+```{r}
+dat1 %>%
+  count(afb) %>%
+  mutate(prop = prop.table(n))
+
+dtree <- rpart(
+afb ~ capacitations + rearing_system, 
+               data = dat1)
+dtree
+```
+
+
+```{r}
+summary(dtree)
+```
+
+
+```{r}
+rpart.plot(dtree)
+```
+
+
+```{r}
+df <- data.frame(imp = dtree$variable.importance) %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+# Basic piechart
+
+df %>% 
+  ggplot() +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
+
+> Odds de afb segun hygiene, calostrum_feeding_num, realiza_calostrado, capacitations, vacination, experience, rearing system
+## Transformo la variable mortalidad a binomial
+
+```{r}
+df <- dat %>% 
+  mutate(AFB = if_else(afb>15, TRUE, FALSE))
+str(df)
+```
+
+## Regresion logistica
+
+```{r}
+m1 <- glm(AFB ~ hygiene+ calostrum_feeding_num+ realiza_calostrado+ capacitations+ vacination+ experience + rearing_system, 
+          data = df, family = binomial)
+```
+
+```{r}
+summary(m1)
+```
+
+```{r}
+tab_model(m1)
+```
+
+No hay odds de nada
+
+
+### Fertility at first insemination
+```{r}
+mod5 <- lm(ffi ~ prepartum + realiza_calostrado + hygiene , data= dat)
+```
+```{r}
+car::Anova(mod5)
+
+```
+
+```{r}
+mod <- lm(ffi ~ ., data= na.omit(dat))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver en ambos modelos, la fertilidad a la primera inseminacion se ve afectada por las caracteristicas del preparto
+
+
+## Analisis descriptivo de la encuesta
+
+```{r}
+str(dat)
+```
+
+```{r}
+pacman::p_load(car)
+```
+
+```{r}
+hist(dat$disease_ranking,  freq=TRUE,
+     main='Histograma para disease_ranking',
+     xlab='Disease',
+     ylab='Frecuencia')
+```
+
+
+```{r}
+res <- t.test(x=dat$disease_ranking, conf.level=0.95)
+res$conf.int
+```
+
+```{r}
+str(dat$prepartum)
+new<-dat %>% 
+  mutate(as.factor(prepartum))
+new
+
+str(new)
+```
+
+```{r}
+Prepartum<-table(new$`as.factor(prepartum)`)
+```
+```{r}
+library(sjmisc) # Utilidades para encuestas con etiquetas
+library(survey) # Análisis de encuestas complejas
+library(car)    # Inferencia de modelos
+```
+
+
+```{r}
+porcentajes <- prop.table(Prepartum)                     #F) Calcular frecuencias relativas
+porcentaje <- as.data.frame(Prepartum); porcentaje   #G) Convertir a data frame
+```
+```{r}
+dat %>% frq(prepartum,weights=peso,sort.frq="desc") %>% kable()
+```
