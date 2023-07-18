@@ -60,12 +60,6 @@ ul.task-list li input[type="checkbox"] {
 
 </header>
 
-<div class="cell">
-<div class="cell-output cell-output-stderr">
-<pre><code>[conflicted] Will prefer dplyr::select over any other package.
-[conflicted] Will prefer dplyr::filter over any other package.</code></pre>
-</div>
-</div>
 <section id="datos" class="level2">
 <h2 class="anchored" data-anchor-id="datos">Datos</h2>
 <div class="cell">
@@ -688,6 +682,7 @@ $odds_plot</code></pre>
 </section>
 <section id="árbol-de-clasificación" class="level2">
 <h2 class="anchored" data-anchor-id="árbol-de-clasificación">Árbol de clasificación</h2>
+<!-- https://www.displayr.com/how-is-variable-importance-calculated-for-a-random-forest/#:~:text=This%20importance%20is%20a%20measure,accuracy%20due%20to%20random%20noise. -->
 <div class="cell">
 <div class="cell-output cell-output-stdout">
 <pre><code>n= 90 
@@ -715,13 +710,13 @@ rpart(formula = mortality ~ liquid_feeding_volume + hygiene +
     capacitations + experience, data = dat_mort)
   n= 90 
 
-          CP nsplit rel error    xerror      xstd
-1 0.14318343      0 1.0000000 1.0439795 0.1882694
-2 0.04263603      1 0.8568166 1.0127022 0.2244449
-3 0.03687784      2 0.8141805 1.0464554 0.2245905
-4 0.01253940      3 0.7773027 0.9921815 0.2229760
-5 0.01182635      5 0.7522239 1.0121651 0.2226505
-6 0.01000000      6 0.7403976 1.0203417 0.2241968
+          CP nsplit rel error   xerror      xstd
+1 0.14318343      0 1.0000000 1.024344 0.1867612
+2 0.04263603      1 0.8568166 1.022836 0.2253830
+3 0.03687784      2 0.8141805 1.125172 0.2302332
+4 0.01253940      3 0.7773027 1.075186 0.2233471
+5 0.01182635      5 0.7522239 1.076708 0.2236588
+6 0.01000000      6 0.7403976 1.067487 0.2241841
 
 Variable importance
            experience         capacitations               hygiene 
@@ -807,7 +802,7 @@ Node number 19: 13 observations
   mean=6.076923, MSE=11.76331 </code></pre>
 </div>
 <div class="cell-output-display">
-<p><img src="mortalidad_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="672"></p>
+<p><img src="mortalidad_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
 <p>Clasifica los casos. - las particiones que aparecen arriba son las que capturan mayor variabilidad - vas particionando en grupos menores, mas chicos, con menos variablidad - irian en linea con variable importance si experiencia es mayor o iguala a 3, el promedio es 8.9, y si a su vez capacitacion es mayor igual a 2, tiene un 10 en promedio</p>
@@ -817,7 +812,51 @@ Node number 19: 13 observations
 </ul>
 <div class="cell">
 <div class="cell-output-display">
+<p><img src="mortalidad_files/figure-html/unnamed-chunk-8-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+</section>
+<section id="random-forest" class="level2">
+<h2 class="anchored" data-anchor-id="random-forest">Random forest</h2>
+<!-- https://rubenfcasal.github.io/aprendizaje_estadistico/cart-con-el-paquete-rpart.html -->
+<div class="cell">
+<div class="cell-output-display">
 <p><img src="mortalidad_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>mortality is  3.9 when
+    experience &gt;= 3
+    clostrum_feeding_vol &gt;= 3
+    hygiene &gt;= 2
+
+mortality is  6.5 when
+    experience &gt;= 3
+    clostrum_feeding_vol &gt;= 3
+    hygiene &lt; 2
+
+mortality is  6.9 when
+    experience &lt; 3
+    capacitations &gt;= 2
+
+mortality is  7.6 when
+    experience &gt;= 3
+    clostrum_feeding_vol &lt; 3
+
+mortality is 10.5 when
+    experience &lt; 3
+    capacitations &lt; 2</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="cell-output cell-output-stdout">
+<pre><code>          experience clostrum_feeding_vol        capacitations 
+                50.0                 18.0                 14.9 
+             hygiene   realiza_calostrado            prepartum 
+                 9.1                  3.7                  3.2 
+          vacination 
+                 1.1 </code></pre>
 </div>
 </div>
 </section>
