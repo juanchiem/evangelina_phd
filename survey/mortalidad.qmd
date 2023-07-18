@@ -34,12 +34,15 @@ pacman::p_load(rpart, rpart.plot)
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
 ```
+
 ##  Datos
 
 ```{r}
 dat_mort <- dat %>% 
-  select(-c(feed_cows, milk_yield, scc, afb, ffi)) %>% 
-  drop_na()
+  select(-c(feed_cows, milk_yield, scc, afb, ffi, vacination)) %>%
+  mutate_at(vars(-(mortality)),as.factor) %>%
+  drop_na()  
+  # str
 dat_mort %>% skim()
 hist(dat_mort$mortality) 
 ```
@@ -48,9 +51,10 @@ hist(dat_mort$mortality)
 
 ```{r}
 mod <- lm(mortality ~ ., data= dat_mort)
-summary(mod)
+anova(mod)
+
 mod_step <- stepAIC(mod,  direction="both")
-summary(mod_step)
+anova(mod_step)
 ```
 
 ```{r}
@@ -62,8 +66,7 @@ En este grafico podemos ver todas las variables que tienen efecto sobre mortalid
 Analizo la importancia relativa de las variables presentes en el modelo
 
 ```{r}
-ri <- calc.relimp(mod_step, type="car", rela=TRUE, rank = TRUE) 
-ri
+ri <- calc.relimp(mod, type="car", rela=TRUE, rank = TRUE)
 ```
 
 El volumen de dieta liquida explica el 30% de la mortalidad, seguido de capacitaciones con 21% e higiene con 18%
@@ -82,8 +85,12 @@ Este ultimo grafico exploratorio muestra que en realidad hay pocos datos para el
 ## Reg log - mort<5
 
 ```{r}
-mod_bin <- glm(mortality > 5 ~ ., data=dat_mort)
+mod_bin <- glm(mortality >= 3 ~ ., data=dat_mort)
+car::Anova(mod_bin)
+
 mod_step <- stepAIC(mod_bin,  direction="both")
+car::Anova(mod_step)
+
 summary(mod_step)
 odds_plot(mod_step)
 ```
@@ -127,24 +134,3 @@ data.frame(imp = dtree_quant$variable.importance) %>%
   geom_point() +
   coord_flip()
 ```
-
-
-## Random forest 
-
-<!-- https://rubenfcasal.github.io/aprendizaje_estadistico/cart-con-el-paquete-rpart.html -->
-
-```{r}
-tree_mort <- rpart(mortality ~ ., data = dat_mort)
-rpart.plot(tree_mort)  
-```
-
-```{r}
-rpart.rules(tree_mort, style = "tall")
-```
-
-```{r}
-importance <- tree_mort$variable.importance # Equivalente a caret::varImp(tree) 
-importance <- round(100*importance/sum(importance), 1)
-importance
-```
-
