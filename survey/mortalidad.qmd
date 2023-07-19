@@ -35,12 +35,15 @@ pacman::p_load(rpart, rpart.plot)
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
 ```
+
 ##  Datos
 
 ```{r}
 dat_mort <- dat %>% 
-  select(-c(feed_cows, milk_yield, scc, afb, ffi)) %>% 
-  drop_na()
+  select(-c(feed_cows, milk_yield, scc, afb, ffi, vacination)) %>%
+  mutate_at(vars(-(mortality)),as.factor) %>%
+  drop_na()  
+  # str
 dat_mort %>% skim()
 hist(dat_mort$mortality) 
 ```
@@ -50,9 +53,10 @@ En ese histograma podemos ver la frecuencia de distribucion de mortalidad en los
 
 ```{r}
 mod <- lm(mortality ~ ., data= dat_mort)
-summary(mod)
+anova(mod)
+
 mod_step <- stepAIC(mod,  direction="both")
-summary(mod_step)
+anova(mod_step)
 ```
 
 ```{r}
@@ -64,8 +68,7 @@ En este grafico podemos ver todas las variables que tienen efecto sobre mortalid
 Analizo la importancia relativa de las variables presentes en el modelo
 
 ```{r}
-ri <- calc.relimp(mod_step, type="car", rela=TRUE, rank = TRUE) 
-ri
+ri <- calc.relimp(mod, type="car", rela=TRUE, rank = TRUE)
 ```
 
 La experiencia representa un 42% de la variacion en mortalidad, capacitaciones el 15% y vol de dieta liquida 14%
@@ -84,8 +87,16 @@ Este ultimo grafico exploratorio muestra que en realidad hay pocos datos para el
 ## Reg log - mort<3. Tansformo la variable mortalidad a binaria (> o < a 3)
 
 ```{r}
+<<<<<<< HEAD
 mod_bin <- glm(mortality > 3 ~ ., data=dat_mort)
+=======
+mod_bin <- glm(mortality >= 3 ~ ., data=dat_mort)
+car::Anova(mod_bin)
+
+>>>>>>> 90fe7143d9f46f7d506657c2dee969fe14ff9029
 mod_step <- stepAIC(mod_bin,  direction="both")
+car::Anova(mod_step)
+
 summary(mod_step)
 tab_model(mod_step)
 ```
@@ -146,6 +157,7 @@ data.frame(imp = dtree_quant$variable.importance) %>%
   geom_point() +
   coord_flip()
 ```
+<<<<<<< HEAD
 
 
 ## Random forest 
@@ -181,3 +193,5 @@ data.frame(importance = tree_mort$variable.importance) %>%
 ```
 
 
+=======
+>>>>>>> 90fe7143d9f46f7d506657c2dee969fe14ff9029
