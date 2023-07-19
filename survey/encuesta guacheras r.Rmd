@@ -254,6 +254,7 @@ df1 <- data.frame(yAxis = boxLabels,
   annotate(geom = 'text', y =1.1, x = 3.5, label ='Model p < 0.001\nPseudo 
 R^2 = 0.10', size = 3.5, hjust = 0) + ggtitle('Odds ratio for Mortality')
 )
+
 ```
 
 

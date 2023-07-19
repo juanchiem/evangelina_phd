@@ -23,13 +23,14 @@ pacman::p_load(tidyverse, janitor,  skimr,
                # GGally, correlation, 
                # performance, 
                scales, 
-               # emmeans, multcomp, finalfit,  
+               # emmeans, multcomp, 
                # oddsratio,
                coefplot, 
                OddsPlotty, 
                relaimpo, 
                gtools, 
-               sjPlot)
+               sjPlot,
+               finalfit)
 pacman::p_load(rpart, rpart.plot)
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
@@ -43,6 +44,7 @@ dat_mort <- dat %>%
 dat_mort %>% skim()
 hist(dat_mort$mortality) 
 ```
+En ese histograma podemos ver la frecuencia de distribucion de mortalidad en los establecimientos encuestados. Se puede ver que el 40% de los encuestados tiene < del 5% de mortalidad, seguido de un 30% con mortalidad entre 5 y 10%.
 
 ## Reg. lineal múltiple
 
@@ -88,7 +90,7 @@ summary(mod_step)
 tab_model(mod_step)
 ```
 
-Cuando corremos  el modelo con mortalidad como binaria, sale del modelo el sistema de alojamiento e ingresa la variable volumen de calostro consumido antes de las 24 hs. Esta variable si bien no tiene efecto, si es importante para el odelo y por eso la ingresa, higiene en este caso pierde su nivel de significancia pero permanece en el modelo.
+Cuando corremos  el modelo con mortalidad como binaria, sale del modelo el sistema de alojamiento e ingresa la variable volumen de calostro consumido antes de las 24 hs. Esta variable si bien no tiene efecto, si es importante para el modelo y por eso la ingresa, higiene en este caso pierde su nivel de significancia pero permanece en el modelo.
 ```{r}
 odds_plot(mod_step)
 ```
@@ -109,7 +111,6 @@ QUEDA RARO ESTE ODDS!!!!!!!!!!!!!!!!!! SON TODOS POSITIVOS QUE ONDA
 ```{r}
 odds_plot(m1)
 ```
-
 
 ## Árbol de clasificación
 
