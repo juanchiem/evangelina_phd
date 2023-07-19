@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE,
 ```{r paquetes}
 pacman::p_load(tidyverse, janitor,  skimr, rio, here,
                GGally, correlation, performance, 
-               emmeans, multcomp, oddsratio, coefplot)
+               emmeans, multcomp, oddsratio, coefplot, relaimpo)
  
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
@@ -68,7 +68,7 @@ summary(mod_step)
 coefplot(mod_step, parm = -1)
 ```
 
-En este grafico podemos ver todas las variables que tienen efecto sobre mortalidad la disminuyen, menos vacunacion la cual muestra que al aumentar la vacunacion aumenta la mortalidad. Preguntar a Lu como armo la tabla..
+En este grafico podemos ver todas las variables que tienen efecto sobre mortalidad la disminuyen, menos rearing_systema y vacunacion la cual muestra que al aumentar la vacunacion aumenta la mortalidad. Preguntar a Lu como armo la tabla..
 
 Analizo la importancia relativa de las variables presentes en el modelo
 
@@ -178,7 +178,6 @@ summary(m1)
 ```
 
 ```{r}
-pacman::p_load(sjPlot)
 tab_model(m1)
 ```
 
@@ -371,13 +370,6 @@ ri
 df <- dat2 
 str(df)
 
-```
-## Modelo lineal generalizado
-```{r}
-m1 <- glm(milk_yield_band ~ liquid_feeding_volume+experience+hygiene+vacination+capacitations, data = df, family = binomial)
-```
-```{r}
-summary(m1)
 ```
 ```{r}
 pacman::p_load(sjPlot)

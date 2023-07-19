@@ -1,4 +1,11 @@
 ---
+title: "Mortality"
+author: "Evangelina"
+date: "2023-07-18"
+output: html_document
+---
+
+---
 title: "Mortalidad"
 format: html
 editor: source
@@ -23,13 +30,14 @@ pacman::p_load(tidyverse, janitor,  skimr,
                # GGally, correlation, 
                # performance, 
                scales, 
-               # emmeans, multcomp, finalfit,  
+               # emmeans, multcomp, 
                # oddsratio,
                coefplot, 
                OddsPlotty, 
                relaimpo, 
                gtools, 
-               sjPlot)
+               sjPlot,
+               finalfit)
 pacman::p_load(rpart, rpart.plot)
 conflicted::conflict_prefer("select", "dplyr")
 conflicted::conflict_prefer("filter", "dplyr")
@@ -109,7 +117,6 @@ QUEDA RARO ESTE ODDS!!!!!!!!!!!!!!!!!! SON TODOS POSITIVOS QUE ONDA
 ```{r}
 odds_plot(m1)
 ```
-
 
 ## Árbol de clasificación
 

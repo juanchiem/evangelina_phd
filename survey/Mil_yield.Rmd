@@ -1,0 +1,163 @@
+---
+title: "Milk Yield"
+author: "Evangelina"
+date: "2023-07-18"
+output: html_document
+---
+
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
+```{r data}
+dat <- rio::import(here::here("survey/survey23.csv"))
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, janitor,  skimr, 
+               # GGally, correlation, 
+               # performance, 
+               scales, 
+               # emmeans, multcomp, finalfit,  
+               # oddsratio,
+               coefplot, 
+               OddsPlotty, 
+               relaimpo, 
+               gtools, 
+               sjPlot)
+pacman::p_load(rpart, rpart.plot)
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+# Milk yield
+
+```{r}
+dat_milk <- dat %>% 
+  select(-c(mortality, scc, afb, ffi)) %>% 
+  drop_na()
+dat_milk %>% skim()
+```
+
+## Reg lineal multiple
+
+```{r}
+mod <- lm(milk_yield ~ ., data= dat_milk)
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+summary(mod_step)
+```
+
+```{r}
+coefplot(mod_step, intercept = FALSE)
+```
+En este grafico podemos ver todas las variables que tienen efecto sobre milk_yield aumentan (segun el modelo solo la alimentacion de las vacas y el volumen de calostro tienen efecto).
+
+* Importancia relativa
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+Se puede ver que el tipo de alimentacion de las vacas tiene una importacia del 37% sobre produccion de leche, y el volumen de calostro del 33%.
+
+## Reg log - Milk_yield. Tansformo la variable mortalidad a trinaria ()
+
+```{r}
+dat2 <- dat_milk %>%
+    mutate( milk_yield_band = quantcut(milk_yield, q = c(0, 0.33, 0.66, 1), 
+            labels = c("low", "mid", "high")))
+dat2
+
+table(dat2$milk_yield, dat2$milk_yield_band)
+mod_bin<- glm (milk_yield_band ~ ., data=dat2)
+dat2 <- stepAIC(milk_yield_band,  direction="both")
+summary(dat2)
+tab_model(dat2)
+```
+mod_bin <- glm(mortality > 3 ~ ., data=dat_mort)
+mod_step <- stepAIC(mod_bin,  direction="both")
+summary(mod_step)
+tab_model(mod_step)
+
+Cuando corremos  el modelo con mortalidad como binaria, sale del modelo el sistema de alojamiento e ingresa la variable volumen de calostro consumido antes de las 24 hs. Esta variable si bien no tiene efecto, si es importante para el odelo y por eso la ingresa, higiene en este caso pierde su nivel de significancia pero permanece en el modelo.
+```{r}
+odds_plot(mod_step)
+```
+
+###Odds ratio
+
+```{r}
+m1 <- glm(mortality > 3 ~ ., data=dat_mort, family = binomial)
+summary(m1)
+```
+
+```{r}
+tab_model(m1)
+```
+
+QUEDA RARO ESTE ODDS!!!!!!!!!!!!!!!!!! SON TODOS POSITIVOS QUE ONDA 
+
+```{r}
+odds_plot(m1)
+```
+
+
+## Random forest
+
+```{r}
+dat_milk$milk_yield %>% hist
+```
+
+```{r}
+dat2 <- dat_milk %>%
+    mutate( milk_yield_band = quantcut(milk_yield, q = c(0, 0.33, 0.66, 1), 
+            labels = c("low", "mid", "high")))
+
+table(dat2$milk_yield, dat2$milk_yield_band)
+```
+
+```{r}
+dat2 %>% names
+# set the target variable
+targ <- "milk_yield_band"
+# set the predictors
+preds <- c(
+"vacination", "prepartum", "experience", "capacitations","rearing_system","realiza_calostrado",
+"calostrum_feeding_num", "clostrum_feeding_vol","liquid_feeding_volume", "hygiene",                "disease_ranking")
+
+
+# build a simple rpart decision tree using the default settings
+dtree <- rpart(formula = dat2[,targ] ~ ., data = dat2[,preds])
+```
+
+## Arbol de clasificacion
+
+```{r}
+rpart.plot(dtree)
+# dtree
+```
+En este arbol de prediccion se ve que si e metodo de calostrado era al pie de la madre, la produccion de leche era baja en un 34% de los casos y si a su vez se suministraba un volumen de calostro menor a 4 litros antes de las 24 horas de nacido la prod. era baja en 21 % de los establecimientos encuestads. Por otro lado si el calostro era dado de forma arificial, y se suministraba un volumen antes de las 24 hs superior a 4, la produccion de leche era alta
+
+
+* Histograma de importancia de las variables predictoras sobre mortalidad
+
+```{r}
+df <- data.frame(imp = dtree$variable.importance)
+df2 <- df %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+
+ggplot(df2) +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
