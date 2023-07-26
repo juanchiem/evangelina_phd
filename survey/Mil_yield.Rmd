@@ -64,61 +64,40 @@ ri
 ```
 Se puede ver que el tipo de alimentacion de las vacas tiene una importacia del 37% sobre produccion de leche, y el volumen de calostro del 33%.
 
-## Reg log - Milk_yield. Tansformo la variable mortalidad a trinaria ()
-
 ```{r}
 dat2 <- dat_milk %>%
     mutate( milk_yield_band = quantcut(milk_yield, q = c(0, 0.33, 0.66, 1), 
             labels = c("low", "mid", "high")))
-dat2
 
 table(dat2$milk_yield, dat2$milk_yield_band)
-mod_bin<- glm (milk_yield_band ~ ., data=dat2)
-dat2 <- stepAIC(milk_yield_band,  direction="both")
-summary(dat2)
-tab_model(dat2)
 ```
-mod_bin <- glm(mortality > 3 ~ ., data=dat_mort)
+## Reg log - Milk_yield. Tansformo la variable mortalidad a trinaria?
+
+```{r}
+dat$milk_yield %>% hist
+dat1 <- dat %>% 
+  mutate(milk_yield_cat = cut(milk_yield, 
+                          breaks=c(-Inf, 7000, 8150, Inf),
+                          labels=c("low","middle","high")))
+dat1
+```
+```{r}
+library(gtools)
+```
+
+```{r}
+mod_bin <-glm(milk_yield_band ~ liquid_feeding_volume+experience+hygiene+capacitations+realiza_calostrado + feed_cows, clostrum_feeding_vol, data = dat2, family = binomial)
 mod_step <- stepAIC(mod_bin,  direction="both")
 summary(mod_step)
+```
+
+```{r}
 tab_model(mod_step)
-
-Cuando corremos  el modelo con mortalidad como binaria, sale del modelo el sistema de alojamiento e ingresa la variable volumen de calostro consumido antes de las 24 hs. Esta variable si bien no tiene efecto, si es importante para el odelo y por eso la ingresa, higiene en este caso pierde su nivel de significancia pero permanece en el modelo.
-```{r}
 odds_plot(mod_step)
-```
-
-###Odds ratio
-
-```{r}
-m1 <- glm(mortality > 3 ~ ., data=dat_mort, family = binomial)
-summary(m1)
-```
-
-```{r}
-tab_model(m1)
-```
-
-QUEDA RARO ESTE ODDS!!!!!!!!!!!!!!!!!! SON TODOS POSITIVOS QUE ONDA 
-
-```{r}
-odds_plot(m1)
 ```
 
 
 ## Random forest
-
-```{r}
-dat_milk$milk_yield %>% hist
-```
-
-```{r}
-dat2 <- dat_milk %>%
-    mutate( milk_yield_band = quantcut(milk_yield, q = c(0, 0.33, 0.66, 1), 
-            labels = c("low", "mid", "high")))
-
-table(dat2$milk_yield, dat2$milk_yield_band)
-```
 
 ```{r}
 dat2 %>% names
@@ -159,5 +138,115 @@ ggplot(df2) +
   coord_flip() +
   scale_fill_grey() +
   theme_bw()
+```
+
+## Factorizo variables predictoras
+Si factorizo las variables predictoras, el modelo queda de la siguiente forma:
+
+
+```{r}
+dat_milk2 <- dat %>% 
+  select(-c(mortality, scc, afb, ffi, vacination)) %>%
+  mutate_at(vars(-(milk_yield)),as.factor) %>%
+  drop_na()  
+  # str
+dat_milk2
+```
+## Reg. lineal múltiple
+
+```{r}
+mod <- lm(milk_yield ~ ., data= dat_milk2)
+anova(mod)
+
+mod_step <- stepAIC(mod,  direction="both")
+anova(mod_step)
+```
+Se puede ver que en el modelo las variables preparto, metodo de calostrado, volumen de calostro y alimentacion de las vacas impactan en la produccion de leche, mientras que disease ranking si bien no afecta la produccion de leche igual es incluida en el modelo.
+
+```{r}
+coefplot(mod_step, intercept = FALSE)
+```
+Este grafico muestra que el tipo de alimentacion TMR es el que impacta en la produccion de leche
+
+## Reg log - milk_yield_band. 
+
+
+```{r}
+mod_bin <-glm(milk_yield_band ~ prepartum+ liquid_feeding_volume+experience+hygiene+capacitations+realiza_calostrado + feed_cows, clostrum_feeding_vol, data = dat2, family = binomial)
+mod_step <- stepAIC(mod_bin,  direction="both")
+car::Anova(mod_step)
+summary(mod_step)
+```
+```{r}
+tab_model(mod_step)
+```
+Cuando corremos  el modelo con milk_yield trinaria? y las otras variables como factor, vemos que experiencia higyene, metodo de calostrado y alimentacion de las vacas impactan en la produccion de leche 
+```{r}
+odds_plot(mod_step)
+```
+
+## Árbol de clasificación
+
+<!-- https://www.displayr.com/how-is-variable-importance-calculated-for-a-random-forest/#:~:text=This%20importance%20is%20a%20measure,accuracy%20due%20to%20random%20noise. -->
+
+
+```{r}
+dtree_quant <- rpart(milk_yield ~ experience + hygiene + realiza_calostrado + 
+    feed_cows, data = dat2)
+dtree_quant
+summary(dtree_quant)
+rpart.plot(dtree_quant)
+```
+
+Clasifica los casos. 
+- las particiones que aparecen arriba son las que capturan mayor variabilidad
+- vas particionando en grupos menores, mas chicos, con menos variablidad
+- irian en linea con variable importance
+La media de produccion de leche de todas las encuestas es de 7693 litros. Si la alimentacion es TMR (>3), 28% de los establecimientos llegan a 8581 litros y si el personal tiene experiencia en preparto, se llega a 8968 litros.
+
+- Importancia de las variables predictoras sobre mortalidad
+
+```{r}
+data.frame(imp = dtree_quant$variable.importance) %>%
+  rownames_to_column("variable") %>% 
+  # distinct(variable)
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable)) %>%
+  ggplot() +
+  aes(x = variable, y = imp) +
+  geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
+```
+## Random forest 
+
+<!-- https://rubenfcasal.github.io/aprendizaje_estadistico/cart-con-el-paquete-rpart.html -->
+
+```{r}
+tree_milk <- rpart(milk_yield ~ ., data = dat2)
+rpart.plot(tree_milk)  
+```
+
+```{r}
+rpart.rules(tree_milk, style = "tall")
+```
+
+```{r}
+importance <- tree_milk$variable.importance # Equivalente a caret::varImp(tree) 
+importance <- round(100*importance/sum(importance), 1)
+importance
+```
+
+```{r}
+data.frame(importance = tree_milk$variable.importance) %>%
+  rownames_to_column("variable") %>% 
+  # distinct(variable)
+  arrange(importance) %>%
+  mutate(variable = fct_inorder(variable)) %>%
+  ggplot() +
+  aes(x = variable, y = importance) +
+  geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
 ```
 

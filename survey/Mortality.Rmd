@@ -26,8 +26,8 @@ dat <- read.csv("https://raw.githubusercontent.com/juanchiem/agro_data/master/su
 ```
 
 ```{r paquetes, include=FALSE}
-pacman::p_load(tidyverse, janitor,  skimr, 
-               # GGally, correlation, 
+pacman::p_load(tidyverse, janitor,  skimr,
+                GGally, correlation, 
                # performance, 
                scales, 
                # emmeans, multcomp, 
@@ -49,7 +49,8 @@ dat_mort <- dat %>%
   select(-c(feed_cows, milk_yield, scc, afb, ffi)) %>% 
   drop_na()
 dat_mort %>% skim()
-hist(dat_mort$mortality) 
+hist(dat_mort$mortality)
+  
 ```
 
 ## Reg. lineal múltiple
@@ -97,8 +98,80 @@ tab_model(mod_step)
 ```
 
 Cuando corremos  el modelo con mortalidad como binaria, sale del modelo el sistema de alojamiento e ingresa la variable volumen de calostro consumido antes de las 24 hs. Esta variable si bien no tiene efecto, si es importante para el odelo y por eso la ingresa, higiene en este caso pierde su nivel de significancia pero permanece en el modelo.
+
+```{r}
+mod_bin2<- glm(mortality > 3 ~ vacination + experience + capacitations + clostrum_feeding_vol + liquid_feeding_volume+ hygiene, data = dat_mort)
+mod_step <- stepAIC (mod_bin2, direction = "both")
+summary(mod_step)
+tab_model(mod_bin2)
+```
+```{r}
+dat_mort2<-dat_mort %>% 
+  mutate(Mortality = mortality > 3, TRUE, FALSE, na.rm=TRUE)
+dat_mort2
+
+```
+
+
+```{r}
+library(finalfit)
+# OR plot
+data(dat_mort2)
+explanatory = c("vacination", "experience","capacitations","liquid_feeding_volume")
+dependent = "Mortality"
+dat_mort2 %>%
+   or_plot(dependent, explanatory)
+```
+```{r}
+pacman::p_load(OddsPlotty)
+```
+```{r}
+boxLabels = c("Vacination", "Experience","Capacitations","Liquid feeding volume")
+boxOdds =  c(0.19, -0.12, -0.13, -0.25)
+boxCILow = c(0.04, -0.21, -0.26, -0.44)
+boxCIHigh = c(0.35, -0.02, -0.01, -0.05)
+```
+
+
+```{r}
+df <- data.frame(yAxis = boxLabels,
+  boxOdds = 
+   c(0.19, -0.12, -0.13, -0.25),
+  boxCILow = 
+   c(0.04, -0.21, -0.26, -0.44),
+  boxCIHigh = 
+  c(0.35, -0.02, -0.01, -0.05))
+```
+
+```{r}
+(p <- ggplot(df, aes(x = boxOdds, y = boxLabels)) +
+  geom_vline(aes(xintercept = 1), size = .25, linetype = 'dashed') +
+  geom_errorbarh(aes(xmax = boxCIHigh, xmin = boxCILow), size = .5, height = 
+      .2, color = 'gray50') +
+  geom_point(size = 3.5, color = 'orange') +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank()) +
+  scale_x_continuous(breaks = seq(0,7,1) ) +
+  coord_trans(x = 'log10') +
+  ylab('') +
+  xlab('Odds ratio (log scale)') +
+  annotate(geom = 'text', y =1.1, x = 3.5, label ='Model p < 0.001\nPseudo 
+R^2 = 0.10', size = 3.5, hjust = 0) + ggtitle('Odds ratio for Mortality')
+)
+
+```
+
+
+
+
+
+
 ```{r}
 odds_plot(mod_step)
+```
+```{r}
+ggsave(last_plot(), file="survey/odds_mortality.tiff", 
+       w=80, h=60, units="mm", dpi=300)
 ```
 
 ###Odds ratio
@@ -112,11 +185,168 @@ summary(m1)
 tab_model(m1)
 ```
 
-QUEDA RARO ESTE ODDS!!!!!!!!!!!!!!!!!! SON TODOS POSITIVOS QUE ONDA 
 
 ```{r}
 odds_plot(m1)
 ```
+```{r}
+ggsave(last_plot(), file="survey/odds_mortality2.tiff", 
+       w=80, h=60, units="mm", dpi=300)
+```
+
+## Árbol de clasificación
+
+<!-- https://www.displayr.com/how-is-variable-importance-calculated-for-a-random-forest/#:~:text=This%20importance%20is%20a%20measure,accuracy%20due%20to%20random%20noise. -->
+
+
+```{r}
+dtree_quant <- rpart(
+  mortality ~ liquid_feeding_volume+hygiene+capacitations+experience, 
+  data = dat_mort)
+dtree_quant
+summary(dtree_quant)
+rpart.plot(dtree_quant)
+```
+```{r}
+ggsave(last_plot(), file="survey/arbol_mortality.tiff", 
+       w=80, h=60, units="mm", dpi=300)
+```
+
+Clasifica los casos. 
+- las particiones que aparecen arriba son las que capturan mayor variabilidad
+- vas particionando en grupos menores, mas chicos, con menos variablidad
+- irian en linea con variable importance
+La media de mortalidad de todas las encuestas es de 6.3%. Si experiencia es mayor o igual a 3, el promedio de mortalidad es 4.9%, y si a su vez capacitacion es mayor igual a 2, tiene un 3.5% en promedio. A su vex si las practicas de higiene son >=3 la mortalidad se reduce al 2,5%.
+
+- Importancia de las variables predictoras sobre mortalidad
+
+```{r}
+data.frame(imp = dtree_quant$variable.importance) %>%
+  rownames_to_column("variable") %>% 
+  # distinct(variable)
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable)) %>%
+  ggplot() +
+  aes(x = variable, y = imp) +
+  geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
+```
+```{r}
+ggsave(last_plot(), file="survey/imp_mortality.tiff", 
+       w=80, h=60, units="mm", dpi=300)
+```
+
+
+## Random forest 
+
+<!-- https://rubenfcasal.github.io/aprendizaje_estadistico/cart-con-el-paquete-rpart.html -->
+
+```{r}
+tree_mort <- rpart(mortality ~ ., data = dat_mort)
+rpart.plot(tree_mort)  
+```
+```{r}
+ggsave(last_plot(), file="survey/arbol2_mortality.tiff", 
+       w=80, h=60, units="mm", dpi=300)
+```
+
+```{r}
+rpart.rules(tree_mort, style = "tall")
+```
+
+```{r}
+importance <- tree_mort$variable.importance # Equivalente a caret::varImp(tree) 
+importance <- round(100*importance/sum(importance), 1)
+importance
+```
+
+```{r}
+data.frame(importance = tree_mort$variable.importance) %>%
+  rownames_to_column("variable") %>% 
+  # distinct(variable)
+  arrange(importance) %>%
+  mutate(variable = fct_inorder(variable)) %>%
+  ggplot() +
+  aes(x = variable, y = importance) +
+  geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
+```
+```{r}
+ggsave(last_plot(), file="survey/imp2_mortality.tiff", 
+       w=80, h=60, units="mm", dpi=300)
+```
+
+
+## Factorizo variables predictoras
+Si factorizo las variables predictoras, el modelo queda de la siguiente forma:
+
+
+```{r}
+dat_mort <- dat %>% 
+  select(-c(feed_cows, milk_yield, scc, afb, ffi, vacination)) %>%
+  mutate_at(vars(-(mortality)),as.factor) %>%
+  drop_na()  
+  # str
+dat_mort %>% skim()
+hist(dat_mort$mortality) 
+```
+En ese histograma podemos ver la frecuencia de distribucion de mortalidad en los establecimientos encuestados. Se puede ver que el 40% de los encuestados tiene < del 5% de mortalidad, seguido de un 30% con mortalidad entre 5 y 10%.
+
+## Reg. lineal múltiple
+
+```{r}
+mod <- lm(mortality ~ ., data= dat_mort)
+anova(mod)
+
+mod_step <- stepAIC(mod,  direction="both")
+anova(mod_step)
+```
+Se puede ver que en el modelo sale la variable vacunacion al preparto, y ejersen efecto sobre mortalidad la experiencia y capacitaciones del personal, mientras que el sistema de alojamiento de los terneros, volumen de dieta liquida e higiene presentan una tendencia sobre la mortalidad.
+
+```{r}
+coefplot(mod_step, intercept = FALSE)
+```
+
+En este grafico podemos ver que en la medida que se realizan tareas de higiene ya sea total (3) o parcial (2) se reduce la mortalidad (solo una tendencia), en la medida que el personal tiene mayor experiencia se reduce la mortalidad y lo mismo con capacitaciones.
+Analizo la importancia relativa de las variables presentes en el modelo
+
+## Reg log - mort<3. Tansformo la variable mortalidad a binaria (> o < a 3)
+
+```{r}
+mod_bin <- glm(mortality > 3 ~ ., data=dat_mort)
+mod_bin <- glm(mortality >= 3 ~ ., data=dat_mort)
+car::Anova(mod_bin)
+mod_step <- stepAIC(mod_bin,  direction="both")
+car::Anova(mod_step)
+
+summary(mod_step)
+tab_model(mod_step)
+```
+
+Cuando corremos  el modelo con mortalidad como binaria, sale del modelo el sistema de alojamiento e ingresa la variable volumen de dieta liquida. Las caracteristicas del sector preparto ingresan al modelo, si bien no tienen significancia, si es importante para el modelo y por eso la ingresa.
+```{r}
+odds_plot(mod_step)
+```
+```{r}
+ggsave(last_plot(), file="survey/odds_factorizado_mortality.tiff", 
+       w=80, h=60, units="mm", dpi=300)
+```
+
+###Odds ratio
+
+```{r}
+m1 <- glm(mortality > 3 ~ ., data=dat_mort, family = binomial)
+summary(m1)
+```
+
+```{r}
+tab_model(m1)
+```
+
+QUEDA RARO ESTE ODDS!!!!!!!!!!!!!!!!!! 
+
 
 ## Árbol de clasificación
 
@@ -152,6 +382,10 @@ data.frame(imp = dtree_quant$variable.importance) %>%
   geom_point() +
   coord_flip()
 ```
+```{r}
+ggsave(last_plot(), file="survey/imp_factorizado_mortality.tiff", 
+       w=80, h=60, units="mm", dpi=300)
+```
 
 
 ## Random forest 
@@ -161,6 +395,10 @@ data.frame(imp = dtree_quant$variable.importance) %>%
 ```{r}
 tree_mort <- rpart(mortality ~ ., data = dat_mort)
 rpart.plot(tree_mort)  
+```
+```{r}
+ggsave(last_plot(), file="survey/arbol_factorizado_mortality.tiff", 
+       w=80, h=60, units="mm", dpi=300)
 ```
 
 ```{r}
@@ -185,5 +423,4 @@ data.frame(importance = tree_mort$variable.importance) %>%
   geom_point() +
   coord_flip()
 ```
-
 

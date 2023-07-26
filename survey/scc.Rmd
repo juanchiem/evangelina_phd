@@ -1,0 +1,242 @@
+---
+title: "SCC"
+author: "Evangelina"
+date: "2023-07-19"
+output: html_document
+---
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
+```{r data}
+dat <- rio::import(here::here("survey/survey23.csv"))
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, janitor,  skimr, 
+               # GGally, correlation, 
+               # performance, 
+               scales, 
+               # emmeans, multcomp, finalfit,  
+               # oddsratio,
+               coefplot, 
+               OddsPlotty, 
+               relaimpo, 
+               gtools, 
+               sjPlot)
+pacman::p_load(rpart, rpart.plot)
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+# Somatic count cells
+
+```{r}
+dat_scc <- dat %>% 
+  select(-c(afb, ffi, milk_yield, disease_ranking)) %>% 
+  drop_na()
+dat_scc %>% skim()
+```
+```{r}
+mod <- lm(scc ~ capacitations + mortality + hygiene+clostrum_feeding_vol+vacination+  feed_cows  , data=dat_scc)
+```
+
+```{r}
+car::Anova(mod)
+```
+
+## Regresion lineal multiple
+
+```{r}
+mod <- lm(scc ~ ., data= na.omit(dat_scc))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver tanto en el modelo manual como en el que el mismo r arroja, el conteo de celulas somaticas se ve afectado por las practicas de higiene y hay una tendencia de la experiencia del personal en el preparto.
+
+```{r}
+coefplot(mod_step, intercept=FALSE)
+```
+
+En este grafico podemos ver que ambas variables, higiene y experiencia del personal, disminuyen el conteo de celulas somaticas.
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+La higiene explica el 80% de la variaciion en ccs
+
+## Arbol de clasificacion
+
+```{r}
+dat_scc$scc %>% hist
+dat_scc <- dat_scc %>% 
+  mutate(scc = if_else(scc >= 250, TRUE, FALSE))
+str(dat_scc)  
+rowid_to_column(dat_scc)
+```
+
+```{r}
+# dat1 %>%
+#   count(scc) %>%
+#   mutate(prop = prop.table(n))
+
+dtree_scc <- rpart(
+scc ~ hygiene+experience +capacitations+calostrum_feeding_num + realiza_calostrado, 
+               data = dat_scc)
+dtree_scc
+```
+
+```{r}
+# summary(dtree)
+```
+
+```{r}
+rpart.plot(dtree_scc)
+```
+Se puede interpretar que cuando se realizan buenas practicas de higiene un 45% tiene baja ccs y si a su vez el personal tiene capacitaciones las ccs disminuyen aun mas
+
+```{r}
+data.frame(imp = dtree_scc$variable.importance) %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))%>% 
+  ggplot() +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
+> Odds de SCC segun hygiene, calostrum_feeding_num, realiza_calostrado, capacitations, vacination, experience
+## Transformo la variable mortalidad a binomial
+
+```{r}
+dat_scc <- dat_scc %>% 
+  mutate(SCC = if_else(scc>=250, TRUE, FALSE))
+```
+
+## Regresion logistica
+
+```{r}
+m1 <- glm(SCC~hygiene+ calostrum_feeding_num+ realiza_calostrado+ capacitations+ vacination+ experience,  data = dat_scc, family = binomial)
+```
+
+```{r}
+summary(m1)
+```
+
+```{r}
+tab_model(m1)
+```
+
+No hay odds de nada
+
+## Factorizo variables predictoras
+Si factorizo las variables predictoras, el modelo queda de la siguiente forma:
+
+
+```{r}
+scc_new <- dat %>%
+  select(-c(afb, ffi, milk_yield, disease_ranking)) %>% 
+  drop_na() %>% 
+  mutate_at(vars(-(scc)),as.factor) %>%
+  drop_na()  
+  # str
+scc_new
+```
+## Reg. lineal múltiple
+
+```{r}
+mod <- lm(scc ~ ., data= scc_new)
+anova(mod)
+
+mod_step <- stepAIC(mod,  direction="both")
+anova(mod_step)
+```
+Se puede ver que en el modelo las variables preparto e higiene afectan las ccs, mientras que elnumero de tomas de calostro, sistema de alojamiento de terneros y la experiencia del personal tienen una tendencia a impactar en las ccs
+```{r}
+coefplot(mod_step, intercept = FALSE)
+```
+
+## Reg log - ccs
+
+
+```{r}
+mod_bin <-glm(scc ~ ., data = scc_new)
+mod_step <- stepAIC(mod_bin,  direction="both")
+car::Anova(mod_step)
+summary(mod_step)
+```
+```{r}
+tab_model(mod_step)
+```
+
+
+```{r}
+
+odds_plot(mod_step)
+```
+
+## Árbol de clasificación
+
+<!-- https://www.displayr.com/how-is-variable-importance-calculated-for-a-random-forest/#:~:text=This%20importance%20is%20a%20measure,accuracy%20due%20to%20random%20noise. -->
+
+
+```{r}
+dtree_quant <- rpart(scc ~ ., data = scc_new)
+dtree_quant
+summary(dtree_quant)
+rpart.plot(dtree_quant)
+```
+```{r}
+data.frame(imp = dtree_quant$variable.importance) %>%
+  rownames_to_column("variable") %>% 
+  # distinct(variable)
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable)) %>%
+  ggplot() +
+  aes(x = variable, y = imp) +
+  geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
+```
+## Random forest 
+
+<!-- https://rubenfcasal.github.io/aprendizaje_estadistico/cart-con-el-paquete-rpart.html -->
+
+```{r}
+tree_scc <- rpart(scc ~ ., data = scc_new)
+rpart.plot(tree_scc)  
+```
+
+```{r}
+rpart.rules(tree_scc, style = "tall")
+```
+
+```{r}
+importance <- tree_scc$variable.importance # Equivalente a caret::varImp(tree) 
+importance <- round(100*importance/sum(importance), 1)
+importance
+```
+
+```{r}
+data.frame(importance = tree_scc$variable.importance) %>%
+  rownames_to_column("variable") %>% 
+  # distinct(variable)
+  arrange(importance) %>%
+  mutate(variable = fct_inorder(variable)) %>%
+  ggplot() +
+  aes(x = variable, y = importance) +
+  geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
+```

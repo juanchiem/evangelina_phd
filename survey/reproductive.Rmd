@@ -1,0 +1,309 @@
+---
+title: "Reproductive_variables"
+author: "Evangelina"
+date: "2023-07-20"
+output: html_document
+---
+---
+```{r setup global del informe, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, 
+                      warning = FALSE, 
+                      messages = FALSE)
+```
+```{r data}
+dat <- rio::import(here::here("survey/survey23.csv"))
+```
+
+```{r paquetes}
+pacman::p_load(tidyverse, janitor,  skimr, 
+               # GGally, correlation, 
+               # performance, 
+               scales, 
+               # emmeans, multcomp, finalfit,  
+               # oddsratio,
+               coefplot, 
+               OddsPlotty, 
+               relaimpo, 
+               gtools, 
+               sjPlot)
+pacman::p_load(rpart, rpart.plot)
+conflicted::conflict_prefer("select", "dplyr")
+conflicted::conflict_prefer("filter", "dplyr")
+```
+
+```{r}
+dat_repr<- dat %>% 
+  select(-c(scc, milk_yield, mortality, disease_ranking)) %>% 
+  drop_na()
+dat_repr %>% skim()
+```
+### Age at first breeding
+
+#### Regresion lineal multiple
+
+```{r}
+mod <- lm(afb ~ ., data= dat_repr)
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver la edad a la primera inseminacion se ve afectada por capacitacioes del personal y el sistema de crianza adoptado en la gachera
+
+```{r}
+coefplot(mod_step, parm = -1)
+```
+
+En este grafico podemos ver que el metodo de crianza disminuye la edad a la primera inseminacion, mientras que las capacitacines la aumentan.
+
+Analizo la importancia relativa de las variables presentes en el modelo
+
+```{r}
+ri <- calc.relimp(mod_step, type="car", rela=TRUE)
+ri
+```
+
+Las capacitaciones explican el 68% de la edad a la primera inseminacion y el sistema de crianza el 32%.
+
+## Arbol de clasificacion
+
+```{r}
+dat_repr$afb %>% hist
+dat_repr1 <- dat_repr %>% 
+  mutate(AFB = if_else(afb>=15, TRUE, FALSE))
+str(dat_repr1)  
+rowid_to_column(dat_repr1)
+```
+```{r}
+dat_repr1 %>%
+  count(afb>=15) %>%
+  mutate(prop = prop.table(n))
+dat_repr1
+
+```
+
+```{r}
+dat_repr %>% names
+# set the target variable
+targ <- "afb"
+# set the predictors
+preds <- c(
+"vacination", "prepartum", "experience", "capacitations","rearing_system","realiza_calostrado",
+"calostrum_feeding_num", "clostrum_feeding_vol","liquid_feeding_volume", "hygiene")
+
+
+# build a simple rpart decision tree using the default settings
+dtree <- rpart(formula = dat_repr[,targ] ~ ., data = dat_repr[,preds])
+```
+
+
+
+
+```{r}
+summary(dtree)
+```
+
+
+```{r}
+rpart.plot(dtree)
+```
+
+
+```{r}
+df <- data.frame(imp = dtree$variable.importance) %>% 
+  rownames_to_column() %>% 
+  rename("variable" = rowname) %>% 
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable))
+# Basic piechart
+
+df %>% 
+  ggplot() +
+  geom_col(aes(x = variable, y = imp),
+           col = "black", show.legend = F) +
+  coord_flip() +
+  scale_fill_grey() +
+  theme_bw()
+```
+
+
+> Odds de afb segun hygiene, calostrum_feeding_num, realiza_calostrado, capacitations, vacination, experience, rearing system
+## Transformo la variable mortalidad a binomial
+
+```{r}
+df <- dat_repr %>% 
+  mutate(AFB = if_else(afb>15, TRUE, FALSE))
+str(df)
+```
+
+## Regresion logistica
+
+```{r}
+m1 <- glm(AFB ~ hygiene+ calostrum_feeding_num+ realiza_calostrado+ capacitations+ vacination+ experience + rearing_system, data = df, family = binomial)
+```
+
+```{r}
+summary(m1)
+```
+
+```{r}
+tab_model(m1)
+```
+
+No hay odds de nada
+
+## Factorizo variables predictoras
+Si factorizo las variables predictoras, el modelo queda de la siguiente forma:
+
+
+
+```{r}
+repr_new <- dat %>% 
+  select(-c(mortality, scc, vacination, milk_yield, disease_ranking, feed_cows, ffi)) %>%
+  mutate_at(vars(-(afb)),as.factor) %>%
+  drop_na()  
+  # str
+repr_new
+```
+## Reg. lineal múltiple
+
+```{r}
+mod <- lm(afb ~ ., data= repr_new)
+anova(mod)
+
+mod_step <- stepAIC(mod,  direction="both")
+anova(mod_step)
+```
+Cuando factorizo el metodo de calostrado impacta en la edad a la primera inseminacion
+```{r}
+coefplot(mod_step, intercept = FALSE)
+```
+Ver a que llamabamos calostrado2 que aumenta la edad a la primera inseminacion, mientras que el metod de calostrado 3 disminuye la edad a la primera inseminacion (sera el artificial?)
+## Reg log - ccs
+
+
+```{r}
+mod_bin <-glm(afb ~ ., data = repr_new)
+mod_step <- stepAIC(mod_bin,  direction="both")
+car::Anova(mod_step)
+summary(mod_step)
+```
+```{r}
+tab_model(mod_step)
+```
+
+
+```{r}
+
+odds_plot(mod_step)
+```
+
+## Árbol de clasificación
+
+<!-- https://www.displayr.com/how-is-variable-importance-calculated-for-a-random-forest/#:~:text=This%20importance%20is%20a%20measure,accuracy%20due%20to%20random%20noise. -->
+
+
+```{r}
+dtree_quant <- rpart(afb ~ ., data = repr_new)
+dtree_quant
+summary(dtree_quant)
+rpart.plot(dtree_quant)
+```
+```{r}
+data.frame(imp = dtree_quant$variable.importance) %>%
+  rownames_to_column("variable") %>% 
+  # distinct(variable)
+  arrange(imp) %>%
+  mutate(variable = fct_inorder(variable)) %>%
+  ggplot() +
+  aes(x = variable, y = imp) +
+  geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
+```
+## Random forest 
+
+<!-- https://rubenfcasal.github.io/aprendizaje_estadistico/cart-con-el-paquete-rpart.html -->
+
+```{r}
+tree_afb <- rpart(afb ~ ., data = repr_new)
+rpart.plot(tree_afb)  
+```
+
+```{r}
+rpart.rules(tree_afb, style = "tall")
+```
+
+```{r}
+importance <- tree_afb$variable.importance # Equivalente a caret::varImp(tree) 
+importance <- round(100*importance/sum(importance), 1)
+importance
+```
+
+```{r}
+data.frame(importance = tree_afb$variable.importance) %>%
+  rownames_to_column("variable") %>% 
+  # distinct(variable)
+  arrange(importance) %>%
+  mutate(variable = fct_inorder(variable)) %>%
+  ggplot() +
+  aes(x = variable, y = importance) +
+  geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
+```
+
+### Fertility at first insemination
+```{r}
+mod5 <- lm(ffi ~ prepartum + realiza_calostrado + hygiene , data= dat_repr)
+```
+
+```{r}
+car::Anova(mod5)
+```
+
+```{r}
+mod <- lm(ffi ~ ., data= na.omit(dat_repr))
+summary(mod)
+mod_step <- stepAIC(mod,  direction="both")
+
+summary(mod_step)
+```
+Como se puede ver en ambos modelos, la fertilidad a la primera inseminacion se ve afectada (tendencia) por las caracteristicas del preparto
+
+## Factorizo variables predictoras
+Si factorizo las variables predictoras, el modelo queda de la siguiente forma:
+
+
+
+```{r}
+repr_new2 <- dat %>% 
+  select(-c(mortality, scc, vacination, milk_yield, disease_ranking, feed_cows, afb)) %>%
+  mutate_at(vars(-(ffi)),as.factor) %>%
+  drop_na()  
+  # str
+repr_new2
+```
+## Reg. lineal múltiple
+
+```{r}
+mod <- lm(ffi ~ ., data= repr_new2)
+anova(mod)
+
+mod_step <- stepAIC(mod,  direction="both")
+anova(mod_step)
+```
+
+```{r}
+coefplot(mod_step, intercept = FALSE)
+```
+
+## Reg log - ffi
+
+
+```{r}
+mod_bin <-glm(ffi ~ ., data = repr_new2)
+mod_step <- stepAIC(mod_bin,  direction="both")
+car::Anova(mod_step)
+summary(mod_step)
+```
