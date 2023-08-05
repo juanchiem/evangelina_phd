@@ -21,8 +21,9 @@ knitr::opts_chunk$set(echo = FALSE,
 ```
 
 ```{r data}
-# dat <- rio::import(here::here("survey/survey23.csv"))
-dat <- read.csv("https://raw.githubusercontent.com/juanchiem/agro_data/master/survey23.csv", sep = ",") 
+dat <- rio::import(here::here("survey/survey23.csv"))
+head(dat)
+#dat <- read.csv("https://raw.githubusercontent.com/juanchiem/agro_data/master/survey23.csv", sep = ",") 
 ```
 
 ```{r paquetes, include=FALSE}
@@ -46,17 +47,17 @@ conflicted::conflict_prefer("filter", "dplyr")
 
 ```{r}
 dat_mort <- dat %>% 
-  select(-c(feed_cows, milk_yield, scc, afb, ffi)) %>% 
-  drop_na()
+  select(-c(Feed_cows, Milk_yield, SCC, Age_first_service, Fertility_first_insemination)) %>% 
+   drop_na()
 dat_mort %>% skim()
-hist(dat_mort$mortality)
+hist(dat_mort$Mortality)
   
 ```
 
 ## Reg. lineal múltiple
 
 ```{r}
-mod <- lm(mortality ~ ., data= dat_mort)
+mod <- lm(Mortality ~ ., data= dat_mort)
 summary(mod)
 mod_step <- stepAIC(mod,  direction="both")
 summary(mod_step)
@@ -77,47 +78,37 @@ ri
 
 La experiencia representa un 42% de la variacion en mortalidad, capacitaciones el 15% y vol de dieta liquida 14%
 
-```{r}
-dat %>% 
-  ggplot() + 
-  aes(vacination, mortality) + 
-  geom_jitter(width = .1) + 
-  geom_smooth()
-```
-
-Este ultimo grafico exploratorio muestra que en realidad hay pocos datos para el nivel de vacunacion 1 y a lo mejor ahi esta la explicacion del porque da raro el resultado (>vacunacion>mortalidad)
-
 
 ## Reg log - mort<3. Tansformo la variable mortalidad a binaria (> o < a 3)
 
 ```{r}
-mod_bin <- glm(mortality > 3 ~ ., data=dat_mort)
+mod_bin <- glm(Mortality > 3 ~ ., data=dat_mort)
 mod_step <- stepAIC(mod_bin,  direction="both")
 summary(mod_step)
 tab_model(mod_step)
 ```
 
 Cuando corremos  el modelo con mortalidad como binaria, sale del modelo el sistema de alojamiento e ingresa la variable volumen de calostro consumido antes de las 24 hs. Esta variable si bien no tiene efecto, si es importante para el odelo y por eso la ingresa, higiene en este caso pierde su nivel de significancia pero permanece en el modelo.
-
 ```{r}
-mod_bin2<- glm(mortality > 3 ~ vacination + experience + capacitations + clostrum_feeding_vol + liquid_feeding_volume+ hygiene, data = dat_mort)
+dat_mort2<-dat_mort %>% 
+  mutate(Mortality = Mortality > 3, TRUE, FALSE, na.rm=TRUE)
+dat_mort2
+
+```
+```{r}
+mod_bin2<- glm(Mortality ~ Vacination_program + Personnel_experience + Staff_training_frequency + Colostrum_feeding_volume + Liquid_feeding_volume+ Hygiene, data = dat_mort2)
 mod_step <- stepAIC (mod_bin2, direction = "both")
 summary(mod_step)
 tab_model(mod_bin2)
 ```
-```{r}
-dat_mort2<-dat_mort %>% 
-  mutate(Mortality = mortality > 3, TRUE, FALSE, na.rm=TRUE)
-dat_mort2
 
-```
 
 
 ```{r}
 library(finalfit)
 # OR plot
 data(dat_mort2)
-explanatory = c("vacination", "experience","capacitations","liquid_feeding_volume")
+explanatory = c("Vacination_program", "Personnel_experience","Staff_training_frequency","Liquid_feeding_volume")
 dependent = "Mortality"
 dat_mort2 %>%
    or_plot(dependent, explanatory)
@@ -126,58 +117,42 @@ dat_mort2 %>%
 pacman::p_load(OddsPlotty)
 ```
 ```{r}
-boxLabels = c("Vacination", "Experience","Capacitations","Liquid feeding volume")
-boxOdds =  c(0.19, -0.12, -0.13, -0.25)
-boxCILow = c(0.04, -0.21, -0.26, -0.44)
-boxCIHigh = c(0.35, -0.02, -0.01, -0.05)
-```
-
-
-```{r}
-df <- data.frame(yAxis = boxLabels,
-  boxOdds = 
-   c(0.19, -0.12, -0.13, -0.25),
-  boxCILow = 
-   c(0.04, -0.21, -0.26, -0.44),
-  boxCIHigh = 
-  c(0.35, -0.02, -0.01, -0.05))
-```
-
-```{r}
-(p <- ggplot(df, aes(x = boxOdds, y = boxLabels)) +
-  geom_vline(aes(xintercept = 1), size = .25, linetype = 'dashed') +
-  geom_errorbarh(aes(xmax = boxCIHigh, xmin = boxCILow), size = .5, height = 
-      .2, color = 'gray50') +
-  geom_point(size = 3.5, color = 'orange') +
-  theme_bw() +
-  theme(panel.grid.minor = element_blank()) +
-  scale_x_continuous(breaks = seq(0,7,1) ) +
-  coord_trans(x = 'log10') +
-  ylab('') +
-  xlab('Odds ratio (log scale)') +
-  annotate(geom = 'text', y =1.1, x = 3.5, label ='Model p < 0.001\nPseudo 
-R^2 = 0.10', size = 3.5, hjust = 0) + ggtitle('Odds ratio for Mortality')
-)
-
+df<-data.frame (boxLabels = c("Vacination Program", "Personnel experience","Staff training frequency","Liquid feeding volume"),
+boxOdds =  c(0.19, -0.12, -0.13, -0.25),
+boxCILow = c(0.04, -0.21, -0.26, -0.44),
+boxCIHigh = c(0.35, -0.02, -0.01, -0.05))
+df
 ```
 
 
 
-
-
-
 ```{r}
-odds_plot(mod_step)
+(p <- ggplot(df, aes(x = boxOdds, y = boxLabels)) + 
+    geom_vline(aes(xintercept = 0), size = .2, linetype = "dashed") + 
+    geom_errorbarh(aes(xmax = boxCIHigh, xmin = boxCILow), size = .2, height = 
+                    .1, color = "gray50") +
+    geom_point(size = 1.5, color = "orange") +
+    coord_trans(x = scales:::exp_trans(10)) +
+    scale_x_continuous(breaks = log10(seq(0.1, 2.5, 0.5)), labels = seq(0.1, 2.5, 0.5),
+                       limits = log10(c(0.09,2.5))) +
+    theme_bw()+
+    theme(panel.grid.minor = element_blank()) +
+    ylab("") +
+    xlab("Odds ratio") +
+    annotate(geom = "text", y =1, x = log10(1), 
+                     label = "Model p < 0.001\nPseudo R^2 = 0.10", size = 2.5, hjust = - 0.5, color = "gray") 
+) 
 ```
+
 ```{r}
-ggsave(last_plot(), file="survey/odds_mortality.tiff", 
-       w=80, h=60, units="mm", dpi=300)
+ggsave(last_plot(), file="survey/odds_mortality_end.tiff", 
+       w=150, h=80, units="mm", dpi=300)
 ```
 
 ###Odds ratio
 
 ```{r}
-m1 <- glm(mortality > 3 ~ ., data=dat_mort, family = binomial)
+m1 <- glm(Mortality > 3 ~ Vacination_program+ Personnel_experience+Staff_training_frequency+Liquid_feeding_volume, data=dat_mort, family = binomial)
 summary(m1)
 ```
 
@@ -190,8 +165,8 @@ tab_model(m1)
 odds_plot(m1)
 ```
 ```{r}
-ggsave(last_plot(), file="survey/odds_mortality2.tiff", 
-       w=80, h=60, units="mm", dpi=300)
+ggsave(last_plot(), file="survey/odds_mortality222.tiff", 
+       w=100, h=60, units="mm", dpi=300)
 ```
 
 ## Árbol de clasificación
@@ -201,16 +176,23 @@ ggsave(last_plot(), file="survey/odds_mortality2.tiff",
 
 ```{r}
 dtree_quant <- rpart(
-  mortality ~ liquid_feeding_volume+hygiene+capacitations+experience, 
+  Mortality ~ Vacination_program+ Personnel_experience+Staff_training_frequency+Liquid_feeding_volume, 
   data = dat_mort)
 dtree_quant
 summary(dtree_quant)
 rpart.plot(dtree_quant)
 ```
+
 ```{r}
-ggsave(last_plot(), file="survey/arbol_mortality.tiff", 
-       w=80, h=60, units="mm", dpi=300)
+tiff(filename = "dtree_quant.tif",
+     width = 480, height = 480, units = "px", pointsize = 12,
+     compression = c("none"),
+     bg = "white", res = NA, family = "", restoreConsole = TRUE,
+     type = c("windows"),
+     symbolfamily="default")
 ```
+
+
 
 Clasifica los casos. 
 - las particiones que aparecen arriba son las que capturan mayor variabilidad
@@ -221,20 +203,20 @@ La media de mortalidad de todas las encuestas es de 6.3%. Si experiencia es mayo
 - Importancia de las variables predictoras sobre mortalidad
 
 ```{r}
-data.frame(imp = dtree_quant$variable.importance) %>%
-  rownames_to_column("variable") %>% 
+data.frame(Importance = dtree_quant$variable.importance) %>%
+  rownames_to_column("Variable") %>% 
   # distinct(variable)
-  arrange(imp) %>%
-  mutate(variable = fct_inorder(variable)) %>%
+  arrange(Importance) %>%
+  mutate(Variable = fct_inorder(Variable)) %>%
   ggplot() +
-  aes(x = variable, y = imp) +
+  aes(x = Variable, y = Importance) +
   geom_col(width = 0.03) +
   geom_point() +
   coord_flip()
 ```
 ```{r}
 ggsave(last_plot(), file="survey/imp_mortality.tiff", 
-       w=80, h=60, units="mm", dpi=300)
+       w=150, h=100, units="mm", dpi=300)
 ```
 
 

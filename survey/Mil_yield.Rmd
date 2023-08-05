@@ -66,27 +66,19 @@ Se puede ver que el tipo de alimentacion de las vacas tiene una importacia del 3
 
 ```{r}
 dat2 <- dat_milk %>%
-    mutate( milk_yield_band = quantcut(milk_yield, q = c(0, 0.33, 0.66, 1), 
-            labels = c("low", "mid", "high")))
+    mutate( Milk_yield_band = quantcut(milk_yield, q = c(0, 0.33, 0.66, 1), 
+            labels = c("Low", "Mid", "High")))
 
-table(dat2$milk_yield, dat2$milk_yield_band)
+table(dat2$milk_yield, dat2$Milk_yield_band)
 ```
 ## Reg log - Milk_yield. Tansformo la variable mortalidad a trinaria?
 
-```{r}
-dat$milk_yield %>% hist
-dat1 <- dat %>% 
-  mutate(milk_yield_cat = cut(milk_yield, 
-                          breaks=c(-Inf, 7000, 8150, Inf),
-                          labels=c("low","middle","high")))
-dat1
-```
 ```{r}
 library(gtools)
 ```
 
 ```{r}
-mod_bin <-glm(milk_yield_band ~ liquid_feeding_volume+experience+hygiene+capacitations+realiza_calostrado + feed_cows, clostrum_feeding_vol, data = dat2, family = binomial)
+mod_bin <-glm(Milk_yield_band ~ liquid_feeding_volume+experience+hygiene+capacitations+realiza_calostrado + feed_cows, clostrum_feeding_vol, data = dat2, family = binomial)
 mod_step <- stepAIC(mod_bin,  direction="both")
 summary(mod_step)
 ```
@@ -95,7 +87,40 @@ summary(mod_step)
 tab_model(mod_step)
 odds_plot(mod_step)
 ```
+```{r}
+ggsave(last_plot(), file="survey/odds_my.tiff", 
+       w=80, h=60, units="mm", dpi=300)
+```
+```{r}
+df<-data.frame (boxLabels = c( "Experience", "Hygiene", "Method of colostrum feeding", "Type of feed cows"),
+boxOdds =  c(1.87, 1.70, 2.16, 5.78),
+boxCILow = c(1.39, 1.13, 1.34, 2.35),
+boxCIHigh = c(2.56, 2.59, 3.59, 16.68))
+df
+```
 
+
+
+```{r}
+(p <- ggplot(df, aes(x = boxOdds, y = boxLabels)) + 
+    geom_vline(aes(xintercept = 1), size = .2, linetype = "dashed") + 
+    geom_errorbarh(aes(xmax = boxCIHigh, xmin = boxCILow), size = .2, height = 
+                    .1, color = "gray50") +
+    geom_point(size = 1.5, color = "orange") +
+   # coord_trans(x = scales:::exp_trans(10)) +
+   # scale_x_continuous(breaks = log10(seq(0.5, 17.0, 0.5)), labels = seq(0.5, 17.0, 0.5),
+       #                limits = log10(c(0.5,17.0))) +
+    theme_bw()+
+    theme(panel.grid.minor = element_blank()) +
+    ylab("") +
+    xlab("Odds ratio")  
+) 
+```
+
+```{r}
+ggsave(last_plot(), file="survey/odds_MY_end.tiff", 
+       w=150, h=100, units="mm", dpi=300)
+```
 
 ## Random forest
 
@@ -105,8 +130,8 @@ dat2 %>% names
 targ <- "milk_yield_band"
 # set the predictors
 preds <- c(
-"vacination", "prepartum", "experience", "capacitations","rearing_system","realiza_calostrado",
-"calostrum_feeding_num", "clostrum_feeding_vol","liquid_feeding_volume", "hygiene",                "disease_ranking")
+ "experience", "realiza_calostrado",
+"hygiene", "feed_cows")
 
 
 # build a simple rpart decision tree using the default settings
@@ -122,24 +147,31 @@ rpart.plot(dtree)
 En este arbol de prediccion se ve que si e metodo de calostrado era al pie de la madre, la produccion de leche era baja en un 34% de los casos y si a su vez se suministraba un volumen de calostro menor a 4 litros antes de las 24 horas de nacido la prod. era baja en 21 % de los establecimientos encuestads. Por otro lado si el calostro era dado de forma arificial, y se suministraba un volumen antes de las 24 hs superior a 4, la produccion de leche era alta
 
 
-* Histograma de importancia de las variables predictoras sobre mortalidad
-
 ```{r}
-df <- data.frame(imp = dtree$variable.importance)
-df2 <- df %>% 
-  rownames_to_column() %>% 
-  rename("variable" = rowname) %>% 
-  arrange(imp) %>%
-  mutate(variable = fct_inorder(variable))
-
-ggplot(df2) +
-  geom_col(aes(x = variable, y = imp),
-           col = "black", show.legend = F) +
-  coord_flip() +
-  scale_fill_grey() +
-  theme_bw()
+ggsave(last_plot(), file="survey/tree_milk.tiff", 
+       w=150, h=100, units="mm", dpi=300)
 ```
 
+* Histograma de importancia de las variables predictoras sobre mortalidad
+
+
+```{r}
+data.frame(Importance = dtree$variable.importance) %>% 
+  rownames_to_column("Variable") %>% 
+ 
+  arrange(Importance) %>%
+  mutate(variable = fct_inorder(Variable)) %>% 
+ggplot() +
+ aes(x = Variable, y = Importance)+
+           geom_col(width = 0.03) +
+  geom_point() +
+  coord_flip()
+```
+
+```{r}
+ggsave(last_plot(), file="survey/importance_milk.tiff", 
+       w=150, h=100, units="mm", dpi=300)
+```
 ## Factorizo variables predictoras
 Si factorizo las variables predictoras, el modelo queda de la siguiente forma:
 

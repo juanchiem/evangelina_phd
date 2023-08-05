@@ -36,6 +36,8 @@ dat_repr<- dat %>%
   select(-c(scc, milk_yield, mortality, disease_ranking)) %>% 
   drop_na()
 dat_repr %>% skim()
+head(dat_repr)
+
 ```
 ### Age at first breeding
 
@@ -70,13 +72,13 @@ Las capacitaciones explican el 68% de la edad a la primera inseminacion y el sis
 ```{r}
 dat_repr$afb %>% hist
 dat_repr1 <- dat_repr %>% 
-  mutate(AFB = if_else(afb>=15, TRUE, FALSE))
+  mutate(AFB = if_else(afb<=3, TRUE, FALSE))
 str(dat_repr1)  
 rowid_to_column(dat_repr1)
 ```
 ```{r}
 dat_repr1 %>%
-  count(afb>=15) %>%
+  count(afb<=3) %>%
   mutate(prop = prop.table(n))
 dat_repr1
 
@@ -90,15 +92,9 @@ targ <- "afb"
 preds <- c(
 "vacination", "prepartum", "experience", "capacitations","rearing_system","realiza_calostrado",
 "calostrum_feeding_num", "clostrum_feeding_vol","liquid_feeding_volume", "hygiene")
-
-
 # build a simple rpart decision tree using the default settings
 dtree <- rpart(formula = dat_repr[,targ] ~ ., data = dat_repr[,preds])
 ```
-
-
-
-
 ```{r}
 summary(dtree)
 ```
@@ -132,7 +128,7 @@ df %>%
 
 ```{r}
 df <- dat_repr %>% 
-  mutate(AFB = if_else(afb>15, TRUE, FALSE))
+  mutate(AFB = if_else(afb<3, TRUE, FALSE))
 str(df)
 ```
 
@@ -150,7 +146,7 @@ summary(m1)
 tab_model(m1)
 ```
 
-No hay odds de nada
+
 
 ## Factorizo variables predictoras
 Si factorizo las variables predictoras, el modelo queda de la siguiente forma:

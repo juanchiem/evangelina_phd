@@ -35,7 +35,7 @@ dat %>% skim()
 
 ```{r}
 dat %>% 
-  pivot_longer(cols = -c(scc, milk_yield, ffi, mortality)) %>% 
+  pivot_longer(cols = -c(SCC, Milk_yield, Fertility_first_insemination, Mortality, Age_first_service)) %>% 
   group_by(name,value) %>% 
   count() %>% 
   group_by(name) %>% 
@@ -54,11 +54,15 @@ dat %>%
 
 ```{r}
 dat %>% 
-  pivot_longer(cols = c(scc, milk_yield, ffi, mortality)) %>% 
+  pivot_longer(cols = c(SCC, Milk_yield, Fertility_first_insemination, Mortality)) %>% 
   ggplot(aes(x=value)) +
   geom_histogram() + 
   ggstance::geom_boxploth(aes(y = 3), width = 2, color = "blue", lwd = 2, alpha = .5) +
   facet_wrap("name", scales="free")  
+```
+```{r}
+ggsave(last_plot(), file="survey/histogramas.tiff", 
+       w=150, h=100, units="mm", dpi=300)
 ```
 ##Milking cows
 ```{r}

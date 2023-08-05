@@ -1,4 +1,4 @@
-vacination,prepartum,experience,capacitations,rearing_system,realiza_calostrado,calostrum_feeding_num,clostrum_feeding_vol,liquid_feeding_volume,hygiene,disease_ranking,mortality,feed_cows,milk_yield,scc,afb,ffi
+Vacination_program,Prepartum,Personnel_experience,Staff_training_frequency,Rearing_system,Colostrum_method,Colostrum_feeding_num,Colostrum_feeding_volume,Liquid_feeding_volume,Hygiene,Disease_ranking,Mortality,Feed_cows,Milk_yield,SCC,Age_first_service,Fertility_first_insemination
 1,3,4,1,2,1,2,5,2,2,1,2,2,7625,500,3,45
 2,3,3,1,2,2,1,3,3,3,1,7,2,7930,250,2,
 3,3,4,2,2,3,3,5,3,2,4,2,2,8500,180,2,85
